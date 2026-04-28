@@ -1,0 +1,919 @@
+<!DOCTYPE html>
+<!--
+╔══════════════════════════════════════════════════════════════════════════════╗
+║              student_my_lessons.html — LESSON VIDEO PLAYER                   ║
+╠══════════════════════════════════════════════════════════════════════════════╣
+║  URL:     GET /lesson/{lessonId}                                              ║
+║  Returns: "Course/student_my_lessons"                                         ║
+║                                                                               ║
+║  MODEL ATTRIBUTES (all SEPARATE — no lazy loading):                           ║
+║  ${lesson}    → Lesson object (own fields only — no course traversal)         ║
+║  ${course}    → Course object fetched separately by controller                ║
+║  ${videoUrl}  → plain String (lesson.lessonVideoLink extracted in controller) ║
+║  ${cartCount} → int for navbar badge                                          ║
+║                                                                               ║
+║  VIDEO FIX:                                                                   ║
+║  Old: th:attr="data-url=${lesson.lessonVideoLink}" — lazy load crash          ║
+║  New: <span id="videoUrlCarrier" th:text="${videoUrl}"> — always safe          ║
+║       JS reads span.textContent in DOMContentLoaded — never fails             ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+-->
+
+
+<!--
+╔══════════════════════════════════════════════════════════════════════════════╗
+║              student_my_lessons.html — LESSON VIDEO PLAYER (FIXED)          ║
+╠══════════════════════════════════════════════════════════════════════════════╣
+║  URL:     GET /lesson/{courseId}/{lessonId}                                  ║
+║           e.g. /lesson/JAVA101/3                                             ║
+║                                                                              ║
+║  FIXES vs previous version:                                                  ║
+║  1. URL now uses BOTH courseId + lessonId → correct lesson every time        ║
+║  2. Video player is compact (max 760px), centred, not full-screen-wide       ║
+║  3. Sidebar shows ALL lessons for the course (with active highlight)         ║
+║  4. Sidebar lesson links use new /lesson/{courseId}/{lessonId} URL           ║
+║  5. Performance: courseLessons fetched via direct DB query, not lazy load    ║
+║                                                                              ║
+║  MODEL ATTRIBUTES:                                                           ║
+║  ${lesson}        → Lesson object                                            ║
+║  ${course}        → Course object (fetched separately, fully loaded)         ║
+║  ${videoUrl}      → plain String for video URL                               ║
+║  ${courseLessons} → List<Lesson> all lessons of this course (for sidebar)    ║
+║  ${cartCount}     → int for navbar badge                                     ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+-->
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title th:text="${lesson.lessonName} + ' — CourseHub'">Watch Lesson — CourseHub</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&family=Playfair+Display:wght@700;800;900&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+      --midnight: #0c0e1a;
+      --navy:     #0f172a;
+      --deep:     #1e3a8a;
+      --blue:     #2563eb;
+      --blue-lt:  #3b82f6;
+      --blue-soft:#eff6ff;
+      --gold:     #f59e0b;
+      --gold-pale:#fef3c7;
+      --bg:       #f0f4ff;
+      --card:     #ffffff;
+      --s2:       #f8faff;
+      --s3:       #eef2ff;
+      --tx:       #0f172a;
+      --tx2:      #374151;
+      --tx3:      #6b7280;
+      --tx4:      #9ca3af;
+      --bd:       #e5e7eb;
+      --bd2:      #f0f2f9;
+      --green:    #059669;
+      --green-bg: #ecfdf5;
+      --red:      #dc2626;
+      --sh-sm:    0 1px 4px rgba(15,23,42,.06);
+      --sh-md:    0 4px 18px rgba(30,58,138,.1);
+      --sh-lg:    0 10px 36px rgba(30,58,138,.14);
+      --ff-head:  'Playfair Display', Georgia, serif;
+      --ff-body:  'DM Sans', system-ui, sans-serif;
+      --r:        10px;
+      --rl:       16px;
+      --rxl:      20px;
+      --ease:     .2s cubic-bezier(.4,0,.2,1);
+    }
+    body { font-family: var(--ff-body); background: var(--bg); color: var(--tx); font-size: 15px; line-height: 1.6; }
+    a { text-decoration: none; color: inherit; }
+    ul { list-style: none; }
+
+    /* ═══════════════ NAVBAR ═══════════════ */
+    .navbar {
+      background: var(--midnight);
+      position: sticky; top: 0; z-index: 900;
+      box-shadow: 0 1px 0 rgba(255,255,255,.05), 0 4px 20px rgba(0,0,0,.35);
+    }
+    .nav-inner {
+      max-width: 1440px; margin: 0 auto; padding: 0 20px; height: 56px;
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    }
+    .nav-logo {
+      display: flex; align-items: center; gap: 8px;
+      font-family: var(--ff-head); font-size: 1.25rem; font-weight: 900;
+      color: #fff; letter-spacing: -.03em; flex-shrink: 0;
+    }
+    .logo-sq {
+      width: 26px; height: 26px; background: var(--gold);
+      border-radius: 6px; display: flex; align-items: center;
+      justify-content: center; font-size: .78rem;
+    }
+    .nav-mid {
+      flex: 1; display: flex; align-items: center; gap: 6px;
+      overflow: hidden; padding: 0 14px;
+    }
+    .nav-crumb-sep { color: rgba(255,255,255,.22); font-size: .78rem; flex-shrink: 0; }
+    .nav-crumb-course {
+      font-size: .79rem; font-weight: 600; color: rgba(255,255,255,.55);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 260px;
+      transition: color var(--ease);
+    }
+    .nav-crumb-course:hover { color: rgba(255,255,255,.85); }
+    .nav-crumb-lesson {
+      font-size: .79rem; font-weight: 700; color: var(--gold);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 220px;
+    }
+    .nav-right { display: flex; align-items: center; gap: 7px; flex-shrink: 0; }
+    .nav-badge {
+      background: rgba(245,158,11,.15); color: var(--gold);
+      font-size: .65rem; font-weight: 700; padding: 3px 9px;
+      border-radius: 20px; border: 1px solid rgba(245,158,11,.28);
+    }
+    .nav-name { font-size: .79rem; color: rgba(255,255,255,.6); font-weight: 500; }
+    .btn-nav {
+      padding: 6px 12px; font-family: var(--ff-body); font-size: .78rem; font-weight: 600;
+      color: rgba(255,255,255,.75); background: rgba(255,255,255,.07);
+      border: 1px solid rgba(255,255,255,.12); border-radius: var(--r);
+      cursor: pointer; transition: all var(--ease); text-decoration: none;
+      display: inline-flex; align-items: center; white-space: nowrap;
+    }
+    .btn-nav:hover { background: rgba(255,255,255,.14); color: #fff; }
+    .btn-logout {
+      padding: 6px 13px; font-family: var(--ff-body); font-size: .78rem; font-weight: 700;
+      color: var(--midnight); background: var(--gold); border: none;
+      border-radius: var(--r); cursor: pointer; transition: opacity var(--ease);
+    }
+    .btn-logout:hover { opacity: .88; }
+
+    /* ═══════════════ PAGE LAYOUT ═══════════════
+       3-column: lesson-list sidebar | main content | info sidebar
+       On tablet (<1100px): lesson-list collapses to top bar
+       On mobile (<700px): single column
+    ════════════════════════════════════════════ */
+    .page-wrap {
+      max-width: 1440px; margin: 0 auto;
+      display: grid;
+      grid-template-columns: 280px 1fr 300px;
+      min-height: calc(100vh - 56px);
+      align-items: start;
+    }
+
+    /* ═══════════════ LEFT SIDEBAR — Lesson List ═══════════════ */
+    .lesson-sidebar {
+      background: var(--card);
+      border-right: 1px solid var(--bd2);
+      height: calc(100vh - 56px);
+      position: sticky;
+      top: 56px;
+      overflow-y: auto;
+      scrollbar-width: thin;
+      scrollbar-color: var(--bd) transparent;
+    }
+    .lesson-sidebar::-webkit-scrollbar { width: 4px; }
+    .lesson-sidebar::-webkit-scrollbar-thumb { background: var(--bd); border-radius: 4px; }
+
+    .ls-head {
+      padding: 16px 16px 12px;
+      background: linear-gradient(135deg, var(--midnight), #1a2040);
+      position: sticky; top: 0; z-index: 10;
+      border-bottom: 1px solid rgba(255,255,255,.06);
+    }
+    .ls-course-name {
+      font-family: var(--ff-head); font-size: .88rem; font-weight: 700;
+      color: #fff; line-height: 1.35; margin-bottom: 4px;
+    }
+    .ls-trainer {
+      font-size: .69rem; font-weight: 600;
+      color: rgba(245,158,11,.78);
+    }
+    .ls-count {
+      font-size: .65rem; color: rgba(255,255,255,.35);
+      margin-top: 8px;
+    }
+
+    .ls-body { padding: 8px 0; }
+
+    .ls-item {
+      display: flex; align-items: flex-start; gap: 10px;
+      padding: 10px 14px;
+      cursor: pointer;
+      transition: background var(--ease);
+      border-left: 3px solid transparent;
+      text-decoration: none;
+    }
+    .ls-item:hover { background: var(--s2); }
+    .ls-item.active {
+      background: var(--blue-soft);
+      border-left-color: var(--deep);
+    }
+    .ls-num {
+      width: 26px; height: 26px; border-radius: 7px; flex-shrink: 0;
+      background: var(--s3); color: var(--deep);
+      font-size: .72rem; font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
+      margin-top: 1px;
+    }
+    .ls-item.active .ls-num { background: var(--deep); color: #fff; }
+    .ls-item-info { flex: 1; min-width: 0; }
+    .ls-item-name {
+      font-size: .81rem; font-weight: 600; color: var(--tx);
+      line-height: 1.35;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .ls-item.active .ls-item-name { color: var(--deep); font-weight: 700; }
+    .ls-item-topic {
+      font-size: .67rem; color: var(--tx4); margin-top: 2px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .ls-play-icon {
+      font-size: .7rem; color: var(--tx4); flex-shrink: 0; margin-top: 5px;
+    }
+    .ls-item.active .ls-play-icon { color: var(--blue); }
+    .ls-no-video {
+      font-size: .65rem; color: var(--tx4); font-style: italic;
+      display: inline-block; margin-top: 3px;
+    }
+
+    /* ═══════════════ MAIN CONTENT ═══════════════ */
+    .main-col { min-width: 0; background: var(--bg); }
+
+    /* ── VIDEO SECTION ── */
+    .video-section { background: #05070f; }
+
+    /*
+      COMPACT VIDEO PLAYER — max 760px wide, centred.
+      This prevents the stretched, TV-screen look.
+      The 16:9 aspect-ratio trick ensures correct height always.
+    */
+    .video-outer {
+      width: 100%;
+      max-width: 760px;
+      margin: 0 auto;
+      padding: 20px 20px 0;
+    }
+    .video-container {
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      background: #080a14;
+      border-radius: var(--rl);
+      overflow: hidden;
+      position: relative;
+      box-shadow: 0 8px 40px rgba(0,0,0,.5);
+    }
+    .video-container iframe {
+      width: 100%; height: 100%;
+      border: none; display: block;
+    }
+
+    /* Placeholder states */
+    .video-placeholder {
+      position: absolute; inset: 0;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 12px; background: #080a14;
+    }
+    .vp-ring {
+      width: 60px; height: 60px; border-radius: 50%;
+      background: rgba(245,158,11,.1);
+      border: 2px solid rgba(245,158,11,.3);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.5rem;
+    }
+    .vp-title { font-family: var(--ff-head); font-size: .95rem; font-weight: 700; color: rgba(255,255,255,.65); }
+    .vp-sub   { font-size: .76rem; color: rgba(255,255,255,.3); text-align: center; max-width: 230px; line-height: 1.6; }
+    .vp-btn {
+      display: inline-flex; align-items: center; gap: 7px;
+      padding: 9px 20px; font-family: var(--ff-body); font-size: .82rem; font-weight: 700;
+      color: var(--midnight); background: var(--gold);
+      border: none; border-radius: var(--r); cursor: pointer;
+      text-decoration: none; transition: all var(--ease);
+    }
+    .vp-btn:hover { background: #fbbf24; }
+
+    /* Video controls bar below player */
+    .video-controls {
+      max-width: 760px; margin: 0 auto;
+      padding: 12px 20px 16px;
+      display: flex; align-items: center; justify-content: space-between;
+      flex-wrap: wrap; gap: 8px;
+    }
+    .vc-nav { display: flex; gap: 8px; }
+    .btn-vc {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 7px 14px; font-family: var(--ff-body); font-size: .78rem; font-weight: 600;
+      color: rgba(255,255,255,.7); background: rgba(255,255,255,.07);
+      border: 1px solid rgba(255,255,255,.12); border-radius: var(--r);
+      cursor: pointer; transition: all var(--ease); text-decoration: none;
+    }
+    .btn-vc:hover { background: rgba(255,255,255,.14); color: #fff; }
+    .btn-vc.disabled { opacity: .3; pointer-events: none; }
+    .vc-lesson-num { font-size: .72rem; color: rgba(255,255,255,.35); font-weight: 500; }
+
+    /* Video info bar */
+    .video-infobar {
+      background: var(--midnight);
+      padding: 16px 20px 18px;
+      border-top: 1px solid rgba(255,255,255,.04);
+    }
+    .vi-pill {
+      display: inline-flex; align-items: center; gap: 5px;
+      background: rgba(245,158,11,.12); border: 1px solid rgba(245,158,11,.25);
+      color: var(--gold); font-size: .64rem; font-weight: 700;
+      letter-spacing: .07em; text-transform: uppercase;
+      padding: 3px 10px; border-radius: 20px; margin-bottom: 8px;
+    }
+    .vi-title {
+      font-family: var(--ff-head); font-size: 1.15rem; font-weight: 800;
+      color: #fff; line-height: 1.3; margin-bottom: 8px;
+    }
+    .vi-metas { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+    .vi-meta { font-size: .72rem; color: rgba(255,255,255,.42); display: flex; align-items: center; gap: 4px; }
+
+    /* ── CONTENT AREA ── */
+    .content-area { padding: 22px 24px 48px; max-width: 800px; }
+
+    .section-card {
+      background: var(--card); border: 1px solid var(--bd2);
+      border-radius: var(--rxl); padding: 20px 22px;
+      box-shadow: var(--sh-sm); margin-bottom: 16px;
+    }
+    .sc-head {
+      font-family: var(--ff-head); font-size: .93rem; font-weight: 700;
+      color: var(--tx); margin-bottom: 14px;
+      display: flex; align-items: center; gap: 8px;
+    }
+
+    /* Details grid */
+    .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+    .d-item {
+      display: flex; align-items: flex-start; gap: 9px;
+      background: var(--s2); border: 1px solid var(--bd2);
+      border-radius: var(--rl); padding: 10px 12px;
+    }
+    .d-icon {
+      width: 28px; height: 28px; border-radius: 7px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: .8rem; flex-shrink: 0;
+    }
+    .di-b { background: var(--blue-soft); }
+    .di-g { background: var(--gold-pale); }
+    .di-gr { background: var(--green-bg); }
+    .di-p { background: #ede9fe; }
+    .d-lbl {
+      font-size: .62rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .07em; color: var(--tx4); margin-bottom: 2px;
+    }
+    .d-val { font-size: .8rem; font-weight: 600; color: var(--tx); line-height: 1.35; }
+    .d-val.accent { color: var(--deep); }
+    .desc-text { font-size: .85rem; color: var(--tx2); line-height: 1.85; }
+
+    /* Comment section */
+    .comment-top { display: flex; align-items: center; gap: 9px; margin-bottom: 16px; }
+    .comment-heading { font-size: .88rem; font-weight: 700; color: var(--tx); }
+    .comment-badge-ui {
+      background: var(--gold-pale); color: #92400e;
+      font-size: .62rem; font-weight: 700; padding: 2px 8px; border-radius: 20px;
+    }
+    label[for="commentBox"] {
+      display: block; font-size: .77rem; font-weight: 600;
+      color: var(--tx3); margin-bottom: 6px;
+    }
+    .comment-textarea {
+      width: 100%; min-height: 88px; padding: 11px 14px;
+      font-family: var(--ff-body); font-size: .84rem; color: var(--tx);
+      background: var(--card); border: 1.5px solid var(--bd);
+      border-radius: var(--rl); outline: none; resize: vertical; line-height: 1.65;
+      transition: border-color var(--ease), box-shadow var(--ease);
+    }
+    .comment-textarea:focus { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(37,99,235,.1); }
+    .comment-textarea::placeholder { color: var(--tx4); }
+    .comment-row {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-top: 9px; flex-wrap: wrap; gap: 8px;
+    }
+    .comment-hint { font-size: .7rem; color: var(--tx4); }
+    .btn-post {
+      padding: 8px 20px; font-family: var(--ff-body); font-size: .8rem; font-weight: 700;
+      color: #fff; background: var(--deep); border: none; border-radius: var(--r);
+      cursor: pointer; transition: all var(--ease);
+    }
+    .btn-post:hover { background: var(--blue); transform: translateY(-1px); }
+    .comments-list {
+      margin-top: 22px; border-top: 1px solid var(--bd2);
+      padding-top: 16px; display: flex; flex-direction: column; gap: 0;
+    }
+    .c-item {
+      display: flex; gap: 11px; padding: 13px 0;
+      border-bottom: 1px solid var(--bd2);
+      animation: fadeUp .3s ease both;
+    }
+    .c-item:last-child { border-bottom: none; }
+    @keyframes fadeUp { from { opacity:0; transform:translateY(5px); } to { opacity:1; transform:translateY(0); } }
+    .c-av {
+      width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-size: .79rem; font-weight: 800; color: #fff;
+    }
+    .av-b { background: linear-gradient(135deg,#1e3a8a,#2563eb); }
+    .av-g { background: linear-gradient(135deg,#059669,#34d399); }
+    .av-p { background: linear-gradient(135deg,#6d28d9,#a78bfa); }
+    .c-name { font-size: .8rem; font-weight: 700; color: var(--tx); }
+    .c-time { font-size: .67rem; color: var(--tx4); margin-bottom: 3px; }
+    .c-text { font-size: .79rem; color: var(--tx2); line-height: 1.6; }
+
+    /* ═══════════════ RIGHT SIDEBAR ═══════════════ */
+    .right-sidebar {
+      background: var(--card);
+      border-left: 1px solid var(--bd2);
+      height: calc(100vh - 56px);
+      position: sticky; top: 56px;
+      overflow-y: auto;
+      scrollbar-width: thin;
+      scrollbar-color: var(--bd) transparent;
+    }
+    .right-sidebar::-webkit-scrollbar { width: 4px; }
+    .right-sidebar::-webkit-scrollbar-thumb { background: var(--bd); border-radius: 4px; }
+
+    .rs-head {
+      padding: 16px 16px 12px;
+      border-bottom: 1px solid var(--bd2);
+      position: sticky; top: 0; z-index: 10; background: var(--card);
+    }
+    .rs-head-title { font-size: .8rem; font-weight: 700; color: var(--tx); margin-bottom: 10px; }
+    .rs-btn {
+      display: flex; align-items: center; gap: 7px;
+      padding: 8px 12px; font-family: var(--ff-body); font-size: .78rem; font-weight: 600;
+      color: var(--tx2); background: var(--s2); border: 1px solid var(--bd2);
+      border-radius: var(--rl); cursor: pointer; transition: all var(--ease);
+      text-decoration: none; margin-bottom: 6px; width: 100%;
+    }
+    .rs-btn:hover { background: var(--blue-soft); color: var(--deep); border-color: #bfdbfe; }
+    .rs-btn.pri { background: var(--deep); color: #fff; border-color: var(--deep); }
+    .rs-btn.pri:hover { background: var(--blue); }
+
+    .rs-now {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--bd2);
+      background: linear-gradient(135deg, rgba(30,58,138,.04), rgba(37,99,235,.03));
+    }
+    .rs-now-lbl {
+      font-size: .62rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .08em; color: var(--tx4); margin-bottom: 5px;
+    }
+    .rs-now-name {
+      font-size: .86rem; font-weight: 700; color: var(--tx);
+      margin-bottom: 5px; line-height: 1.4;
+    }
+    .rs-now-topic {
+      display: inline-flex; align-items: center; gap: 4px;
+      background: var(--s3); color: var(--deep);
+      font-size: .66rem; font-weight: 600; padding: 3px 9px; border-radius: 20px;
+    }
+
+    .rs-tips { padding: 14px 16px; }
+    .rs-tips-head { font-size: .75rem; font-weight: 700; color: var(--tx); margin-bottom: 10px; }
+    .tip-r {
+      display: flex; align-items: flex-start; gap: 7px;
+      margin-bottom: 8px; font-size: .73rem; color: var(--tx3); line-height: 1.55;
+    }
+    .tip-n {
+      width: 16px; height: 16px; border-radius: 50%;
+      background: var(--blue-soft); color: var(--deep);
+      font-size: .6rem; font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0; margin-top: 1px;
+    }
+
+    /* FOOTER */
+    footer {
+      background: var(--navy); color: rgba(255,255,255,.4);
+      padding: 18px; text-align: center; font-size: .75rem;
+      grid-column: 1 / -1;
+    }
+    footer a { color: var(--gold); }
+
+    /* ═══════════════ RESPONSIVE ═══════════════ */
+    @media (max-width: 1200px) {
+      .page-wrap { grid-template-columns: 240px 1fr 260px; }
+    }
+    @media (max-width: 1000px) {
+      .page-wrap { grid-template-columns: 1fr; }
+      .lesson-sidebar {
+        height: auto; position: static;
+        border-right: none; border-bottom: 1px solid var(--bd2);
+        display: flex; overflow-x: auto; overflow-y: visible;
+        scrollbar-width: none;
+      }
+      .lesson-sidebar::-webkit-scrollbar { display: none; }
+      .ls-head { display: none; }
+      .ls-body { display: flex; padding: 0; }
+      .ls-item {
+        flex-direction: column; align-items: center; gap: 4px;
+        padding: 10px 14px; min-width: 130px;
+        border-left: none; border-bottom: 3px solid transparent;
+        text-align: center;
+      }
+      .ls-item.active { border-left-color: transparent; border-bottom-color: var(--deep); }
+      .ls-item-topic { display: none; }
+      .ls-play-icon { display: none; }
+      .ls-num { margin: 0; }
+      .ls-item-name { font-size: .73rem; }
+      .right-sidebar {
+        height: auto; position: static;
+        border-left: none; border-top: 1px solid var(--bd2);
+      }
+      .nav-mid { display: none; }
+    }
+    @media (max-width: 700px) {
+      .video-outer { padding: 12px 12px 0; }
+      .video-controls { padding: 10px 14px 12px; }
+      .video-infobar { padding: 12px 14px 14px; }
+      .vi-title { font-size: 1rem; }
+      .content-area { padding: 16px 14px 36px; }
+      .detail-grid { grid-template-columns: 1fr; }
+      .nav-inner { padding: 0 12px; }
+      .nav-name, .nav-badge { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════
+     NAVBAR
+═══════════════════════════════════════════════════════ -->
+<nav class="navbar">
+  <div class="nav-inner">
+    <a href="/student-home" class="nav-logo">
+      <div class="logo-sq">📚</div>CourseHub
+    </a>
+
+    <!-- Breadcrumb: uses ${course} and ${lesson} — both fully loaded, no lazy -->
+    <div class="nav-mid">
+      <a class="nav-crumb-course"
+         th:href="@{/course/{id}(id=${course != null ? course.courseId : '#'})}"
+         th:text="${course != null ? course.courseName : 'Course'}">Course Name</a>
+      <span class="nav-crumb-sep">›</span>
+      <span class="nav-crumb-lesson" th:text="${lesson.lessonName}">Lesson Name</span>
+    </div>
+
+    <div class="nav-right">
+      <span class="nav-badge">🎓 Student</span>
+      <span class="nav-name" th:text="${session.user.firstname}">Student</span>
+      <a th:href="@{/course/{id}(id=${course != null ? course.courseId : '#'})}"
+         class="btn-nav">← Course</a>
+      <a href="/my-courses" class="btn-nav">My Courses</a>
+      <a href="/logout"><button class="btn-logout">Logout</button></a>
+    </div>
+  </div>
+</nav>
+
+<div class="page-wrap">
+
+  <!-- ═══════════════════════════════════
+       LEFT SIDEBAR — Lesson List
+       Uses ${courseLessons} passed from controller.
+       Highlights the currently-playing lesson.
+  ══════════════════════════════════════ -->
+  <aside class="lesson-sidebar">
+    <div class="ls-head">
+      <div class="ls-course-name"
+           th:text="${course != null ? course.courseName : 'Course'}">Course Name</div>
+      <div class="ls-trainer"
+           th:text="${course != null ? 'by ' + course.trainerName : ''}">by Trainer</div>
+      <div class="ls-count"
+           th:text="${#lists.size(courseLessons)} + ' lessons'">0 lessons</div>
+    </div>
+    <div class="ls-body">
+      <!--
+        Loop through all lessons of this course.
+        ${courseLessons} = List<Lesson> from stServices.getLessonsByCourse(courseId)
+        Active class is applied when this lesson's ID matches the current lesson.
+
+        URL: /lesson/{courseId}/{lessonId}  ← FIXED URL includes courseId
+      -->
+      <a class="ls-item"
+         th:each="ls : ${courseLessons}"
+         th:href="@{/lesson/{cid}/{lid}(cid=${course.courseId},lid=${ls.lessonId})}"
+         th:classappend="${ls.lessonId == lesson.lessonId} ? ' active' : ''">
+        <div class="ls-num" th:text="${ls.lessonId}">1</div>
+        <div class="ls-item-info">
+          <div class="ls-item-name" th:text="${ls.lessonName}">Lesson Name</div>
+          <div class="ls-item-topic" th:text="${ls.lessonTopic}">Topic</div>
+          <!-- Show "no video" label if no link -->
+          <span class="ls-no-video"
+                th:if="${ls.lessonVideoLink == null or ls.lessonVideoLink.isEmpty()}">
+            No video
+          </span>
+        </div>
+        <div class="ls-play-icon"
+             th:if="${ls.lessonVideoLink != null and !ls.lessonVideoLink.isEmpty()}">▶</div>
+      </a>
+    </div>
+  </aside>
+
+  <!-- ═══════════════════════════════════
+       MAIN CONTENT
+  ══════════════════════════════════════ -->
+  <main class="main-col">
+    <div class="video-section">
+
+      <!--
+        VIDEO URL CARRIER — reliable Thymeleaf → JS bridge.
+        th:text="${videoUrl}" renders the plain String from controller.
+        JS reads .textContent in DOMContentLoaded — never fails.
+      -->
+      <span id="videoUrlCarrier" th:text="${videoUrl}"
+            style="display:none;visibility:hidden;position:absolute;"></span>
+
+      <!--
+        COMPACT VIDEO PLAYER — max 760px, centred, proper aspect ratio.
+        The video-outer div limits width. video-container uses aspect-ratio.
+      -->
+      <div class="video-outer">
+        <div class="video-container" id="videoContainer">
+          <div class="video-placeholder" id="videoPlaceholder">
+            <div class="vp-ring">⏳</div>
+            <div class="vp-title">Loading lesson video...</div>
+            <div class="vp-sub">Preparing your content</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Prev / Next navigation below video -->
+      <div class="video-controls">
+        <div class="vc-nav">
+          <!--
+            PREV button: navigate to previous lesson.
+            Find prev lesson by searching courseLessons for lessonId - 1.
+            Thymeleaf doesn't support this directly — handle it simply:
+            Link to /lesson/{courseId}/{lessonId-1}. Controller handles
+            redirect to /my-courses if lesson not found.
+
+            For a cleaner solution, the controller can set prevLessonId / nextLessonId.
+          -->
+          <a class="btn-vc"
+             th:href="@{/lesson/{cid}/{lid}(cid=${course.courseId},lid=${lesson.lessonId - 1})}">
+            ← Prev
+          </a>
+          <a class="btn-vc"
+             th:href="@{/lesson/{cid}/{lid}(cid=${course.courseId},lid=${lesson.lessonId + 1})}">
+            Next →
+          </a>
+        </div>
+        <span class="vc-lesson-num">
+          Lesson #<span th:text="${lesson.lessonId}">1</span>
+          of <span th:text="${#lists.size(courseLessons)}">?</span>
+        </span>
+      </div>
+
+      <!-- Info bar below video -->
+      <div class="video-infobar">
+        <div class="vi-pill">
+          📌 <span th:text="${lesson.lessonTopic}">Topic</span>
+        </div>
+        <h1 class="vi-title" th:text="${lesson.lessonName}">Lesson Name</h1>
+        <div class="vi-metas">
+          <div class="vi-meta">🆔 Lesson #<span th:text="${lesson.lessonId}">1</span></div>
+          <div class="vi-meta">·</div>
+          <div class="vi-meta">
+            👨‍💻 <span th:text="${course != null ? course.trainerName : 'Trainer'}">Trainer</span>
+          </div>
+          <div class="vi-meta">·</div>
+          <div class="vi-meta">⏱ Self-paced</div>
+        </div>
+      </div>
+    </div><!-- /video-section -->
+
+    <!-- Content below video -->
+    <div class="content-area">
+
+      <!-- Lesson Details -->
+      <div class="section-card">
+        <div class="sc-head">📋 Lesson Details</div>
+        <div class="detail-grid">
+          <div class="d-item">
+            <div class="d-icon di-b">📖</div>
+            <div>
+              <div class="d-lbl">Lesson</div>
+              <div class="d-val accent" th:text="${lesson.lessonName}">Name</div>
+            </div>
+          </div>
+          <div class="d-item">
+            <div class="d-icon di-g">📌</div>
+            <div>
+              <div class="d-lbl">Topic</div>
+              <div class="d-val" th:text="${lesson.lessonTopic}">Topic</div>
+            </div>
+          </div>
+          <div class="d-item">
+            <div class="d-icon di-gr">🎓</div>
+            <div>
+              <div class="d-lbl">Course</div>
+              <div class="d-val" th:text="${course != null ? course.courseName : '—'}">—</div>
+            </div>
+          </div>
+          <div class="d-item">
+            <div class="d-icon di-p">👨‍💻</div>
+            <div>
+              <div class="d-lbl">Trainer</div>
+              <div class="d-val" th:text="${course != null ? course.trainerName : '—'}">—</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Description -->
+      <div class="section-card">
+        <div class="sc-head">📝 About This Lesson</div>
+        <p class="desc-text" th:text="${lesson.lessonDescription}">
+          Lesson description will appear here.
+        </p>
+      </div>
+
+      <!-- Comments -->
+      <div class="section-card">
+        <div class="comment-top">
+          <div class="comment-heading">💬 Discussion</div>
+          <span class="comment-badge-ui">Community</span>
+        </div>
+
+        <label for="commentBox">Share your thoughts or ask a question</label>
+        <textarea id="commentBox" class="comment-textarea"
+                  placeholder="What did you find interesting? Any questions? Share with the community…"
+                  rows="3"></textarea>
+        <div class="comment-row">
+          <span class="comment-hint">Be respectful and specific — good questions help everyone</span>
+          <button class="btn-post" onclick="postComment()">Post Comment</button>
+        </div>
+
+        <div class="comments-list" id="commentsList">
+          <div class="c-item">
+            <div class="c-av av-b">A</div>
+            <div>
+              <div class="c-name">Arjun M.</div>
+              <div class="c-time">2 hours ago</div>
+              <div class="c-text">Great explanation! The code example made it really clear. Going to try building this right now.</div>
+            </div>
+          </div>
+          <div class="c-item">
+            <div class="c-av av-g">S</div>
+            <div>
+              <div class="c-name">Sneha P.</div>
+              <div class="c-time">5 hours ago</div>
+              <div class="c-text">Finally this clicked for me after re-watching twice. The diagram at 4:30 is the key part!</div>
+            </div>
+          </div>
+          <div class="c-item">
+            <div class="c-av av-p">R</div>
+            <div>
+              <div class="c-name">Rahul K.</div>
+              <div class="c-time">1 day ago</div>
+              <div class="c-text">Excellent lesson. I paired this with the notes and got a much deeper understanding.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /content-area -->
+  </main>
+
+  <!-- ═══════════════════════════════════
+       RIGHT SIDEBAR — Info + Quick Nav
+  ══════════════════════════════════════ -->
+  <aside class="right-sidebar">
+    <div class="rs-head">
+      <div class="rs-head-title">Quick Navigation</div>
+      <a class="rs-btn"
+         th:href="@{/course/{id}(id=${course != null ? course.courseId : '#'})}">
+        ← Back to Course
+      </a>
+      <a class="rs-btn" href="/my-courses">📚 All My Courses</a>
+      <a class="rs-btn pri" href="/student-home">🏠 Dashboard</a>
+    </div>
+
+    <div class="rs-now">
+      <div class="rs-now-lbl">Now Watching</div>
+      <div class="rs-now-name" th:text="${lesson.lessonName}">Lesson Name</div>
+      <div class="rs-now-topic">
+        📌 <span th:text="${lesson.lessonTopic}">Topic</span>
+      </div>
+    </div>
+
+    <div class="rs-tips">
+      <div class="rs-tips-head">💡 Learning Tips</div>
+      <div class="tip-r"><div class="tip-n">1</div>Pause and code along — don't just watch</div>
+      <div class="tip-r"><div class="tip-n">2</div>Take notes in your own words</div>
+      <div class="tip-r"><div class="tip-n">3</div>Rewatch confusing parts — no rush</div>
+      <div class="tip-r"><div class="tip-n">4</div>Post questions in the discussion below</div>
+    </div>
+  </aside>
+
+</div><!-- /page-wrap -->
+
+<footer>
+  <p>© 2026 <a href="/">CourseHub</a> — Spring Boot &amp; Thymeleaf</p>
+</footer>
+
+<script>
+  /*
+   * VIDEO EMBED — fully working
+   * Reads URL from hidden span (never triggers lazy load).
+   * Supports YouTube, Google Drive, and any external link.
+   */
+  document.addEventListener('DOMContentLoaded', function () {
+
+    var carrier   = document.getElementById('videoUrlCarrier');
+    var container = document.getElementById('videoContainer');
+    var placeholder = document.getElementById('videoPlaceholder');
+
+    if (!carrier || !container) return;
+
+    var url = (carrier.textContent || carrier.innerText || '').trim();
+
+    function ytId(u) {
+      var pp = [
+        /[?&]v=([a-zA-Z0-9_-]{11})/,
+        /youtu\.be\/([a-zA-Z0-9_-]{11})/,
+        /youtube\.com\/embed\/([a-zA-Z0-9_-]{11})/,
+        /youtube\.com\/shorts\/([a-zA-Z0-9_-]{11})/
+      ];
+      for (var i = 0; i < pp.length; i++) {
+        var m = u.match(pp[i]);
+        if (m) return m[1];
+      }
+      return null;
+    }
+
+    function driveId(u) {
+      var m1 = u.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+      if (m1) return m1[1];
+      var m2 = u.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+      if (m2) return m2[1];
+      return null;
+    }
+
+    function embed(src) {
+      var iframe = document.createElement('iframe');
+      iframe.src = src;
+      iframe.setAttribute('frameborder', '0');
+      iframe.setAttribute('allow', 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share');
+      iframe.setAttribute('allowfullscreen', 'true');
+      iframe.style.cssText = 'border:none;display:block;width:100%;height:100%;';
+      if (placeholder) placeholder.remove();
+      container.appendChild(iframe);
+    }
+
+    function msg(icon, title, sub, linkUrl) {
+      if (!placeholder) return;
+      placeholder.innerHTML =
+        '<div class="vp-ring" style="font-size:1.6rem">' + icon + '</div>' +
+        '<div class="vp-title">' + title + '</div>' +
+        '<div class="vp-sub">' + sub + '</div>' +
+        (linkUrl ? '<a href="' + linkUrl + '" target="_blank" rel="noopener" class="vp-btn">🔗 Open Video</a>' : '');
+    }
+
+    if (!url) {
+      msg('📭', 'No Video Added Yet', "The trainer hasn't uploaded a video for this lesson yet.");
+      return;
+    }
+
+    var yt = ytId(url);
+    if (yt) {
+      embed('https://www.youtube.com/embed/' + yt + '?rel=0&modestbranding=1&color=white');
+      return;
+    }
+
+    if (/drive\.google\.com/i.test(url)) {
+      var did = driveId(url);
+      if (did) {
+        embed('https://drive.google.com/file/d/' + did + '/preview');
+      } else {
+        msg('📁', 'Google Drive Video', 'Make sure the file is shared publicly, then click to open.', url);
+      }
+      return;
+    }
+
+    msg('🔗', 'External Video', 'This video is hosted externally. Click to watch it.', url);
+  });
+
+  /* Comment post handler */
+  function postComment() {
+    var box  = document.getElementById('commentBox');
+    var text = (box.value || '').trim();
+    if (!text) { box.style.borderColor = '#dc2626'; box.focus(); return; }
+    box.style.borderColor = '';
+    var list = document.getElementById('commentsList');
+    var el   = document.createElement('div');
+    el.className = 'c-item';
+    el.innerHTML =
+      '<div class="c-av av-p">Y</div>' +
+      '<div>' +
+        '<div class="c-name">You</div>' +
+        '<div class="c-time">Just now</div>' +
+        '<div class="c-text">' + text.replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</div>' +
+      '</div>';
+    list.prepend(el);
+    box.value = '';
+  }
+</script>
+
+</body>
+</html>

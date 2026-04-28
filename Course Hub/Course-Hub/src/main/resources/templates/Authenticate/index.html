@@ -1,0 +1,1233 @@
+<!DOCTYPE html>
+<!--
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                    index.html  —  PUBLIC LANDING PAGE                       ║
+╠══════════════════════════════════════════════════════════════════════════════╣
+║                                                                              ║
+║  BACKEND DATA FLOW                                                           ║
+║  ─────────────────                                                           ║
+║  1. Any visitor opens GET /                                                 ║
+║  2. NavController.indexPage(Model model) handles it                         ║
+║  3. Calls TrainerService.getAllCourses() → cRepo.findAll()                  ║
+║  4. Puts List<Course> in model, also courseCount                            ║
+║  5. Optionally limits preview to 6 courses                                  ║
+║  6. Thymeleaf renders this page with real course data                      ║
+║                                                                              ║
+║  NavController.java — UPDATE this route:                                    ║
+║  ─────────────────────────────────────────────                              ║
+║  @GetMapping("/")                                                            ║
+║  public String indexPage(Model model) {                                      ║
+║      List<Course> all = tService.getAllCourses();                            ║
+║      // Show max 6 courses on landing page preview                          ║
+║      List<Course> preview = all.size() > 6 ? all.subList(0, 6) : all;      ║
+║      model.addAttribute("courses", preview);                                 ║
+║      model.addAttribute("courseCount", all.size());                          ║
+║      // Count free courses for stats section                                 ║
+║      long freeCount = all.stream()                                           ║
+║          .filter(c -> "free".equalsIgnoreCase(c.getCourseType()))            ║
+║          .count();                                                           ║
+║      model.addAttribute("freeCount", freeCount);                            ║
+║      return "Authenticate/index";                                            ║
+║  }                                                                           ║
+║                                                                              ║
+║  THYMELEAF FIELDS:                                                           ║
+║  ${courseCount}                     → all.size() — total in DB              ║
+║  ${freeCount}                       → free course count                      ║
+║  th:each="course,iter : ${courses}" → loop over preview list (max 6)        ║
+║  ${course.courseName}               → course name                           ║
+║  ${course.courseShortDescription}   → short description                      ║
+║  ${course.trainerName}              → trainer name [BOLD]                    ║
+║  ${course.coursePrice}              → price string                           ║
+║  ${course.courseType}               → "free" or "paid"                       ║
+║  ${#lists.size(course.lessons)}     → lesson count                          ║
+║                                                                              ║
+║  NOTE: Course ID not shown in landing page cards (not user-facing).         ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+-->
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CourseHub — Learn Skills That Matter</title>
+    <!--
+      Fonts: Playfair Display + DM Sans — same as public_courses.html.
+      Brand consistency: ALL pages use this same font pair.
+    -->
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&family=Playfair+Display:wght@700;800;900&display=swap" rel="stylesheet">
+
+    <style>
+        /* ═══════════════════════════════════════════════════════
+           DESIGN TOKENS — BRAND SYSTEM
+           These are shared exactly with public_courses.html and all_Courses.html.
+           Change a token here → updates across the whole product.
+        ═══════════════════════════════════════════════════════ */
+        *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+          /* Core brand palette */
+          --midnight:  #0c0e1a;   /* deepest dark — hero + footer bg */
+          --navy:      #0f172a;   /* slightly lighter dark */
+          --blue-deep: #1e3a8a;   /* primary blue — buttons, accents */
+          --blue:      #2563eb;   /* mid blue — hover states */
+          --blue-lt:   #3b82f6;   /* light blue — subtle accents */
+          --gold:      #f59e0b;   /* gold accent — CTAs, highlights */
+          --gold-pale: #fef3c7;   /* gold background tint */
+
+          /* Page surfaces */
+          --bg:        #f4f7ff;   /* page background */
+          --card:      #ffffff;   /* card background */
+          --surface-2: #f8faff;
+          --surface-3: #eef2ff;
+
+          /* Text hierarchy */
+          --tx:   #0f172a;
+          --tx-2: #374151;
+          --tx-3: #6b7280;
+          --tx-4: #9ca3af;
+
+          /* Borders */
+          --bd:   #e5e7eb;
+          --bd-2: #f0f2f9;
+
+          /* Status */
+          --green:    #059669;
+          --green-bg: #ecfdf5;
+          --red:      #dc2626;
+
+          /* Elevation */
+          --sh-sm: 0 1px 4px rgba(15,23,42,.05), 0 1px 2px rgba(15,23,42,.04);
+          --sh-md: 0 4px 16px rgba(30,58,138,.08);
+          --sh-lg: 0 12px 36px rgba(30,58,138,.13);
+
+          /* Typography */
+          --ff-head: 'Playfair Display', Georgia, serif;
+          --ff-body: 'DM Sans', system-ui, sans-serif;
+
+          /* Radii */
+          --r-sm: 8px; --r: 12px; --r-lg: 18px; --r-xl: 24px;
+          --ease: .2s cubic-bezier(.4,0,.2,1);
+        }
+        body { font-family: var(--ff-body); background: var(--bg); color: var(--tx); font-size: 15px; line-height: 1.6; }
+        a { text-decoration: none; color: inherit; }
+        ul { list-style: none; }
+
+        /* ═══════════════════════════════════════════════════════
+           NAVBAR — matches public_courses.html exactly
+        ═══════════════════════════════════════════════════════ */
+        .navbar {
+          background: var(--midnight); position: sticky; top: 0; z-index: 500;
+          box-shadow: 0 1px 0 rgba(255,255,255,.05), 0 4px 20px rgba(0,0,0,.3);
+        }
+        .nav-inner {
+          max-width: 1240px; margin: 0 auto; padding: 0 28px;
+          height: 66px; display: flex; align-items: center; justify-content: space-between;
+        }
+        /* Logo with square mark — same across all pages */
+        .nav-logo {
+          display: flex; align-items: center; gap: 9px;
+          font-family: var(--ff-head); font-size: 1.45rem;
+          font-weight: 900; color: #fff; letter-spacing: -.03em;
+        }
+        .logo-mark {
+          width: 32px; height: 32px; background: var(--gold);
+          border-radius: 8px; display: flex; align-items: center;
+          justify-content: center; font-size: .9rem; flex-shrink: 0;
+        }
+        .nav-links { display: flex; align-items: center; gap: 2px; }
+        .nav-links a {
+          font-size: .87rem; font-weight: 500;
+          color: rgba(255,255,255,.6); padding: 7px 13px;
+          border-radius: var(--r-sm); transition: all var(--ease);
+        }
+        .nav-links a:hover { color: #fff; background: rgba(255,255,255,.08); }
+        .nav-ctas { display: flex; align-items: center; gap: 10px; }
+        .btn-nav-ghost {
+          padding: 8px 18px; font-family: var(--ff-body);
+          font-size: .84rem; font-weight: 600;
+          color: rgba(255,255,255,.8); background: rgba(255,255,255,.08);
+          border: 1px solid rgba(255,255,255,.15); border-radius: var(--r-sm);
+          cursor: pointer; transition: all var(--ease);
+        }
+        .btn-nav-ghost:hover { background: rgba(255,255,255,.16); color: #fff; }
+        .btn-nav-gold {
+          padding: 8px 20px; font-family: var(--ff-body);
+          font-size: .84rem; font-weight: 700;
+          color: var(--midnight); background: var(--gold);
+          border: none; border-radius: var(--r-sm); cursor: pointer;
+          transition: all var(--ease);
+        }
+        .btn-nav-gold:hover { background: #fbbf24; transform: translateY(-1px); }
+
+        /* ═══════════════════════════════════════════════════════
+           HERO — midnight gradient, identical visual language to
+           public_courses.html hero section.
+        ═══════════════════════════════════════════════════════ */
+        .hero {
+          background: var(--midnight);
+          /* Same radial gradient recipe as public_courses hero */
+          background-image:
+            radial-gradient(ellipse 75% 65% at 68% 45%, rgba(37,99,235,.3) 0%, transparent 60%),
+            radial-gradient(ellipse 40% 50% at 12% 78%, rgba(245,158,11,.14) 0%, transparent 55%),
+            radial-gradient(ellipse 25% 35% at 90% 10%, rgba(245,158,11,.08) 0%, transparent 50%);
+          padding: 88px 0 80px; color: #fff;
+          position: relative; overflow: hidden;
+        }
+        /* Dot-grid texture — same as public_courses hero */
+        .hero::before {
+          content: '';
+          position: absolute; inset: 0;
+          background-image: radial-gradient(circle, rgba(255,255,255,.04) 1px, transparent 1px);
+          background-size: 28px 28px; pointer-events: none;
+        }
+        /* Decorative large circle top-right */
+        .hero::after {
+          content: '';
+          position: absolute; top: -120px; right: -100px;
+          width: 500px; height: 500px; border-radius: 50%;
+          border: 1px solid rgba(255,255,255,.05);
+          pointer-events: none;
+        }
+        .container { max-width: 1240px; margin: 0 auto; padding: 0 28px; position: relative; z-index: 1; }
+
+        /* Hero layout: left text | right floating card */
+        .hero-grid {
+          display: grid; grid-template-columns: 1fr 380px;
+          align-items: center; gap: 56px;
+        }
+        /* Eyebrow tag */
+        .hero-tag {
+          display: inline-flex; align-items: center; gap: 8px;
+          background: rgba(245,158,11,.14); border: 1px solid rgba(245,158,11,.3);
+          color: var(--gold); font-size: .73rem; font-weight: 700;
+          letter-spacing: .09em; text-transform: uppercase;
+          padding: 5px 14px; border-radius: 30px; margin-bottom: 20px;
+        }
+        .hero-tag .live {
+          width: 7px; height: 7px; background: var(--gold); border-radius: 50%;
+          animation: livePulse 2.2s ease-in-out infinite;
+        }
+        @keyframes livePulse {
+          0%,100% { opacity:1; transform:scale(1); }
+          50%      { opacity:.45; transform:scale(.75); }
+        }
+        /* Main heading */
+        .hero-h1 {
+          font-family: var(--ff-head); font-size: 3.8rem;
+          font-weight: 900; line-height: 1.05; letter-spacing: -.04em;
+          margin-bottom: 18px;
+        }
+        .hero-h1 .acc { color: var(--gold); }
+        .hero-sub {
+          font-size: 1.02rem; color: rgba(255,255,255,.65);
+          max-width: 500px; line-height: 1.82; margin-bottom: 32px;
+        }
+        /* CTA row */
+        .hero-ctas { display: flex; gap: 14px; flex-wrap: wrap; }
+        .btn-hero-primary {
+          display: inline-flex; align-items: center; gap: 9px;
+          padding: 14px 28px; font-family: var(--ff-body);
+          font-size: .95rem; font-weight: 700;
+          color: var(--midnight); background: var(--gold);
+          border: none; border-radius: var(--r-sm); cursor: pointer;
+          transition: all var(--ease);
+        }
+        .btn-hero-primary:hover { background: #fbbf24; transform: translateY(-2px); box-shadow: 0 8px 24px rgba(245,158,11,.3); }
+        .btn-hero-ghost {
+          display: inline-flex; align-items: center; gap: 9px;
+          padding: 14px 28px; font-family: var(--ff-body);
+          font-size: .95rem; font-weight: 600;
+          color: #fff; background: transparent;
+          border: 1.5px solid rgba(255,255,255,.3); border-radius: var(--r-sm);
+          cursor: pointer; transition: all var(--ease);
+        }
+        .btn-hero-ghost:hover { border-color: rgba(255,255,255,.7); background: rgba(255,255,255,.07); }
+        /* Social proof row under buttons */
+        .hero-proof {
+          display: flex; align-items: center; gap: 14px;
+          margin-top: 24px; flex-wrap: wrap;
+        }
+        .proof-avatars {
+          display: flex;
+        }
+        .proof-avatar {
+          width: 30px; height: 30px; border-radius: 50%;
+          border: 2px solid var(--midnight);
+          background: linear-gradient(135deg, #2563eb, #7c3aed);
+          display: flex; align-items: center; justify-content: center;
+          font-size: .72rem; font-weight: 700; color: #fff;
+          margin-left: -8px;
+        }
+        .proof-avatar:first-child { margin-left: 0; }
+        .proof-text { font-size: .82rem; color: rgba(255,255,255,.55); }
+        .proof-text strong { color: rgba(255,255,255,.85); font-weight: 600; }
+
+        /* ── Hero floating stats card (right side) ── */
+        .hero-card {
+          background: rgba(255,255,255,.07);
+          border: 1px solid rgba(255,255,255,.12);
+          border-radius: var(--r-xl); padding: 28px 28px 24px;
+          backdrop-filter: blur(12px);
+        }
+        .hero-card-title {
+          font-family: var(--ff-head); font-size: 1rem;
+          font-weight: 700; color: #fff; margin-bottom: 20px;
+        }
+        /* Stat rows inside card */
+        .hstat-row {
+          display: flex; align-items: center; gap: 14px;
+          padding: 14px 0; border-bottom: 1px solid rgba(255,255,255,.07);
+        }
+        .hstat-row:last-child { border-bottom: none; padding-bottom: 0; }
+        .hstat-icon {
+          width: 42px; height: 42px; border-radius: 11px;
+          display: flex; align-items: center; justify-content: center;
+          font-size: 1.2rem; flex-shrink: 0;
+        }
+        .hsi-gold   { background: rgba(245,158,11,.2); }
+        .hsi-blue   { background: rgba(37,99,235,.2); }
+        .hsi-green  { background: rgba(5,150,105,.2); }
+        .hsi-purple { background: rgba(124,58,237,.2); }
+        .hstat-num {
+          font-family: var(--ff-head); font-size: 1.55rem;
+          font-weight: 900; color: #fff; line-height: 1;
+        }
+        .hstat-label { font-size: .72rem; color: rgba(255,255,255,.5); margin-top: 2px; }
+
+        /* ═══════════════════════════════════════════════════════
+           HOW IT WORKS — 3 steps
+        ═══════════════════════════════════════════════════════ */
+        .section { padding: 72px 0; }
+        .section-white { padding: 72px 0; background: var(--card); }
+        .section-dark  {
+          padding: 72px 0;
+          background: var(--navy);
+          background-image:
+            radial-gradient(ellipse 60% 60% at 80% 50%, rgba(37,99,235,.2) 0%, transparent 60%);
+        }
+        /* Shared section header */
+        .sec-header { text-align: center; margin-bottom: 48px; }
+        .sec-tag {
+          display: inline-block;
+          background: var(--gold-pale); color: #92400e;
+          font-size: .72rem; font-weight: 700; text-transform: uppercase;
+          letter-spacing: .1em; padding: 5px 14px; border-radius: 20px;
+          margin-bottom: 14px;
+        }
+        .sec-tag-dark {
+          background: rgba(245,158,11,.18); color: var(--gold);
+        }
+        .sec-title {
+          font-family: var(--ff-head); font-size: 2.1rem;
+          font-weight: 900; color: var(--tx); letter-spacing: -.03em;
+          margin-bottom: 10px;
+        }
+        .sec-title-light { color: #fff; }
+        .sec-sub { font-size: .95rem; color: var(--tx-3); max-width: 500px; margin: 0 auto; line-height: 1.8; }
+        .sec-sub-light { color: rgba(255,255,255,.55); }
+
+        /* Steps grid */
+        .steps-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
+        .step-card {
+          background: var(--card); border: 1px solid var(--bd-2);
+          border-radius: var(--r-xl); padding: 32px 26px;
+          box-shadow: var(--sh-sm);
+          transition: transform var(--ease), box-shadow var(--ease);
+          position: relative;
+        }
+        .step-card:hover { transform: translateY(-4px); box-shadow: var(--sh-md); }
+        /* Step number badge */
+        .step-num {
+          width: 44px; height: 44px; background: var(--blue-deep);
+          border-radius: 12px; color: #fff; font-family: var(--ff-head);
+          font-size: 1.05rem; font-weight: 900;
+          display: flex; align-items: center; justify-content: center;
+          margin-bottom: 18px;
+        }
+        /* Connector line between steps */
+        .step-card:not(:last-child)::after {
+          content: '→';
+          position: absolute; right: -18px; top: 50%;
+          transform: translateY(-50%);
+          font-size: 1.3rem; color: var(--tx-4); z-index: 1;
+        }
+        .step-card h3 { font-size: 1rem; font-weight: 700; color: var(--tx); margin-bottom: 8px; }
+        .step-card p  { font-size: .85rem; color: var(--tx-3); line-height: 1.75; }
+
+        /* ═══════════════════════════════════════════════════════
+           STATS STRIP — between sections
+        ═══════════════════════════════════════════════════════ */
+        .stats-strip {
+          background: var(--blue-deep); padding: 40px 0;
+        }
+        .stats-inner {
+          display: grid; grid-template-columns: repeat(4, 1fr);
+          gap: 0; max-width: 1240px; margin: 0 auto; padding: 0 28px;
+        }
+        .stat-item {
+          text-align: center; padding: 8px 0;
+          border-right: 1px solid rgba(255,255,255,.12);
+        }
+        .stat-item:last-child { border-right: none; }
+        .stat-num {
+          font-family: var(--ff-head); font-size: 2.4rem;
+          font-weight: 900; color: var(--gold); display: block; margin-bottom: 4px;
+        }
+        .stat-label { font-size: .82rem; color: rgba(255,255,255,.6); font-weight: 500; }
+
+        /* ═══════════════════════════════════════════════════════
+           COURSE PREVIEW SECTION
+           Shows 6 courses from backend in compact list style —
+           same .course-row component as public_courses.html
+        ═══════════════════════════════════════════════════════ */
+        .courses-list { display: flex; flex-direction: column; gap: 9px; }
+        /*
+          Same course-row structure as public_courses.html for visual consistency.
+          A visitor browsing index → clicks "View All" → lands on public_courses.html
+          and sees the same card style. Feels like the same product.
+        */
+        .course-row {
+          background: var(--card); border: 1px solid var(--bd-2);
+          border-radius: var(--r-lg);
+          display: grid; grid-template-columns: 72px 1fr auto;
+          align-items: center; overflow: hidden;
+          box-shadow: var(--sh-sm);
+          transition: transform var(--ease), box-shadow var(--ease), border-color var(--ease);
+          animation: rowIn .4s ease both;
+        }
+        .course-row:hover {
+          transform: translateY(-3px); box-shadow: var(--sh-lg);
+          border-color: rgba(37,99,235,.18);
+        }
+        @keyframes rowIn {
+          from { opacity:0; transform:translateY(10px); }
+          to   { opacity:1; transform:translateY(0); }
+        }
+        .row-icon {
+          height: 100%; min-height: 72px;
+          display: flex; align-items: center; justify-content: center;
+          font-size: 1.75rem; position: relative;
+        }
+        .ri1 { background: linear-gradient(145deg,#1e3a8a,#2563eb); }
+        .ri2 { background: linear-gradient(145deg,#064e3b,#10b981); }
+        .ri3 { background: linear-gradient(145deg,#6d28d9,#a78bfa); }
+        .ri4 { background: linear-gradient(145deg,#92400e,#f59e0b); }
+        .ri5 { background: linear-gradient(145deg,#9f1239,#f43f5e); }
+        .ri6 { background: linear-gradient(145deg,#0c4a6e,#0ea5e9); }
+        .row-badge {
+          position: absolute; bottom: 5px; left: 50%; transform: translateX(-50%);
+          font-size: .55rem; font-weight: 800; text-transform: uppercase;
+          letter-spacing: .05em; padding: 2px 6px; border-radius: 20px;
+        }
+        .badge-free { background: rgba(16,185,129,.92); color: #fff; }
+        .badge-paid { background: rgba(255,255,255,.93); color: var(--blue-deep); }
+        .row-info {
+          padding: 13px 18px; display: flex; flex-direction: column; gap: 3px; min-width: 0;
+        }
+        .row-name { font-size: .9rem; font-weight: 700; color: var(--tx); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .row-trainer {
+          display: flex; align-items: center; gap: 5px;
+          font-size: .77rem; font-weight: 700; color: var(--blue);
+        }
+        .row-trainer-icon {
+          width: 16px; height: 16px; border-radius: 50%; background: #dbeafe;
+          display: flex; align-items: center; justify-content: center;
+          font-size: .6rem; flex-shrink: 0;
+        }
+        .row-meta { display: flex; gap: 7px; margin-top: 2px; }
+        .row-chip {
+          display: flex; align-items: center; gap: 3px;
+          background: var(--surface-2); border: 1px solid var(--bd);
+          padding: 2px 7px; border-radius: 20px; font-size: .68rem; color: var(--tx-4);
+        }
+        .row-cta {
+          padding: 13px 16px; display: flex; flex-direction: column;
+          align-items: flex-end; gap: 6px;
+          border-left: 1px solid var(--bd-2); flex-shrink: 0; min-width: 110px;
+        }
+        .price-free { font-family: var(--ff-head); font-size: 1rem; font-weight: 900; color: var(--green); }
+        .price-paid { font-family: var(--ff-head); font-size: 1rem; font-weight: 900; color: var(--blue-deep); }
+        /*
+          On the landing page, the CTA goes to /login (visitor not logged in).
+          After login → routed to /student-home based on role.
+        */
+        .btn-enroll-sm {
+          padding: 7px 16px; font-family: var(--ff-body);
+          font-size: .77rem; font-weight: 700;
+          color: #fff; background: var(--blue-deep);
+          border: none; border-radius: var(--r-sm);
+          cursor: pointer; transition: all var(--ease); white-space: nowrap;
+        }
+        .btn-enroll-sm:hover { background: var(--blue); }
+        .btn-enroll-free-sm { background: var(--green); }
+        .btn-enroll-free-sm:hover { background: #047857; }
+        /* "View All Courses" link */
+        .view-all-row { display: flex; justify-content: center; margin-top: 24px; }
+        .btn-view-all {
+          display: inline-flex; align-items: center; gap: 8px;
+          padding: 12px 28px; font-family: var(--ff-body);
+          font-size: .9rem; font-weight: 700;
+          color: var(--blue-deep); background: var(--surface-3);
+          border: 1.5px solid #bfdbfe; border-radius: var(--r-sm);
+          cursor: pointer; transition: all var(--ease);
+        }
+        .btn-view-all:hover { background: var(--blue-deep); color: #fff; border-color: var(--blue-deep); }
+
+        /* ═══════════════════════════════════════════════════════
+           FEATURES SECTION
+        ═══════════════════════════════════════════════════════ */
+        .features-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+        .feat-card {
+          background: var(--surface-2); border: 1px solid var(--bd-2);
+          border-radius: var(--r-xl); padding: 28px 24px;
+          box-shadow: var(--sh-sm);
+          transition: transform var(--ease), box-shadow var(--ease);
+        }
+        .feat-card:hover { transform: translateY(-4px); box-shadow: var(--sh-md); }
+        .feat-icon {
+          width: 52px; height: 52px; border-radius: 14px;
+          display: flex; align-items: center; justify-content: center;
+          font-size: 1.4rem; margin-bottom: 16px;
+        }
+        .fi-1 { background: #dbeafe; } .fi-2 { background: #d1fae5; }
+        .fi-3 { background: #fef3c7; } .fi-4 { background: #ede9fe; }
+        .fi-5 { background: #fce7f3; } .fi-6 { background: #dcfce7; }
+        .feat-card h3 { font-size: .95rem; font-weight: 700; color: var(--tx); margin-bottom: 7px; }
+        .feat-card p  { font-size: .82rem; color: var(--tx-3); line-height: 1.75; }
+
+        /* ═══════════════════════════════════════════════════════
+           DUAL-ROLE SECTION — student vs trainer
+        ═══════════════════════════════════════════════════════ */
+        .roles-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+        .role-card {
+          border-radius: var(--r-xl); padding: 36px 32px;
+          position: relative; overflow: hidden;
+        }
+        .role-card-student {
+          background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%);
+        }
+        .role-card-trainer {
+          background: linear-gradient(135deg, #0c0e1a 0%, #1e3a8a 100%);
+          border: 1px solid rgba(255,255,255,.1);
+        }
+        /* Decorative circle */
+        .role-card::before {
+          content: ''; position: absolute; right: -40px; bottom: -40px;
+          width: 200px; height: 200px; border-radius: 50%;
+          background: rgba(255,255,255,.06);
+        }
+        .role-icon { font-size: 2.2rem; margin-bottom: 16px; }
+        .role-card h3 {
+          font-family: var(--ff-head); font-size: 1.35rem;
+          font-weight: 900; color: #fff; margin-bottom: 10px; letter-spacing: -.02em;
+        }
+        .role-card p { font-size: .88rem; color: rgba(255,255,255,.65); line-height: 1.75; margin-bottom: 24px; }
+        .role-perks { display: flex; flex-direction: column; gap: 10px; margin-bottom: 28px; }
+        .role-perk {
+          display: flex; align-items: center; gap: 10px;
+          font-size: .85rem; color: rgba(255,255,255,.8);
+        }
+        .perk-check {
+          width: 20px; height: 20px; border-radius: 50%;
+          background: rgba(255,255,255,.18);
+          display: flex; align-items: center; justify-content: center;
+          font-size: .62rem; font-weight: 700; flex-shrink: 0; color: #fff;
+        }
+        .btn-role {
+          display: inline-flex; align-items: center; gap: 8px;
+          padding: 12px 24px; font-family: var(--ff-body);
+          font-size: .88rem; font-weight: 700;
+          border: none; border-radius: var(--r-sm); cursor: pointer;
+          transition: all var(--ease);
+        }
+        .btn-role-student { color: var(--midnight); background: var(--gold); }
+        .btn-role-student:hover { background: #fbbf24; transform: translateY(-2px); }
+        .btn-role-trainer { color: #fff; background: rgba(255,255,255,.18); border: 1px solid rgba(255,255,255,.3); }
+        .btn-role-trainer:hover { background: rgba(255,255,255,.26); }
+
+        /* ═══════════════════════════════════════════════════════
+           TESTIMONIALS / SOCIAL PROOF (simple cards)
+        ═══════════════════════════════════════════════════════ */
+        .testimonials-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+        .testi-card {
+          background: var(--card); border: 1px solid var(--bd-2);
+          border-radius: var(--r-xl); padding: 26px 22px;
+          box-shadow: var(--sh-sm);
+        }
+        .testi-stars { color: var(--gold); font-size: 1rem; margin-bottom: 12px; letter-spacing: 2px; }
+        .testi-text { font-size: .86rem; color: var(--tx-2); line-height: 1.75; margin-bottom: 16px; font-style: italic; }
+        .testi-author { display: flex; align-items: center; gap: 10px; }
+        .testi-avatar {
+          width: 36px; height: 36px; border-radius: 50%;
+          display: flex; align-items: center; justify-content: center;
+          font-size: .9rem; font-weight: 700; color: #fff; flex-shrink: 0;
+        }
+        .av1 { background: linear-gradient(135deg,#2563eb,#7c3aed); }
+        .av2 { background: linear-gradient(135deg,#059669,#2563eb); }
+        .av3 { background: linear-gradient(135deg,#d97706,#dc2626); }
+        .testi-name { font-size: .85rem; font-weight: 700; color: var(--tx); }
+        .testi-role { font-size: .73rem; color: var(--tx-3); }
+
+        /* ═══════════════════════════════════════════════════════
+           FINAL CTA SECTION
+        ═══════════════════════════════════════════════════════ */
+        .cta-section {
+          background: var(--midnight);
+          background-image:
+            radial-gradient(ellipse 60% 80% at 80% 50%, rgba(37,99,235,.3) 0%, transparent 60%),
+            radial-gradient(ellipse 30% 50% at 5% 55%, rgba(245,158,11,.13) 0%, transparent 55%);
+          padding: 96px 0; text-align: center; color: #fff;
+          position: relative; overflow: hidden;
+        }
+        .cta-section::before {
+          content: '';
+          position: absolute; inset: 0;
+          background-image: radial-gradient(circle, rgba(255,255,255,.03) 1px, transparent 1px);
+          background-size: 26px 26px;
+        }
+        .cta-inner { position: relative; z-index: 1; }
+        .cta-label {
+          display: inline-block; background: rgba(245,158,11,.18);
+          border: 1px solid rgba(245,158,11,.3); color: var(--gold);
+          font-size: .72rem; font-weight: 700; text-transform: uppercase;
+          letter-spacing: .1em; padding: 5px 14px; border-radius: 20px;
+          margin-bottom: 20px;
+        }
+        .cta-h2 {
+          font-family: var(--ff-head); font-size: 3rem; font-weight: 900;
+          line-height: 1.1; letter-spacing: -.03em; margin-bottom: 16px;
+        }
+        .cta-h2 span { color: var(--gold); }
+        .cta-sub {
+          font-size: .97rem; color: rgba(255,255,255,.58);
+          max-width: 480px; margin: 0 auto 36px; line-height: 1.8;
+        }
+        .cta-btns { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
+
+        /* ═══════════════════════════════════════════════════════
+           FOOTER — matches public_courses.html exactly
+        ═══════════════════════════════════════════════════════ */
+        footer { background: var(--navy); color: rgba(255,255,255,.4); padding: 56px 0 28px; }
+        .footer-inner { max-width: 1240px; margin: 0 auto; padding: 0 28px; }
+        .footer-grid {
+          display: grid; grid-template-columns: 2fr 1fr 1fr 1fr;
+          gap: 44px; padding-bottom: 40px;
+          border-bottom: 1px solid rgba(255,255,255,.07);
+        }
+        .footer-brand {
+          font-family: var(--ff-head); font-size: 1.35rem;
+          font-weight: 900; color: #fff; display: block; margin-bottom: 10px;
+        }
+        .footer-about { font-size: .83rem; line-height: 1.8; max-width: 210px; }
+        .footer-col h5 {
+          font-size: .72rem; font-weight: 700; text-transform: uppercase;
+          letter-spacing: .1em; color: rgba(255,255,255,.55); margin-bottom: 14px;
+        }
+        .footer-col ul { display: flex; flex-direction: column; gap: 9px; }
+        .footer-col a { font-size: .83rem; color: rgba(255,255,255,.4); transition: color var(--ease); }
+        .footer-col a:hover { color: #fff; }
+        .footer-bottom {
+          padding-top: 24px;
+          display: flex; justify-content: space-between;
+          align-items: center; font-size: .79rem; flex-wrap: wrap; gap: 8px;
+        }
+        .footer-bottom a { color: var(--gold); }
+
+        /* ═══════════════════════════════════════════════════════
+           RESPONSIVE
+        ═══════════════════════════════════════════════════════ */
+        @media (max-width: 1024px) {
+          .hero-grid       { grid-template-columns: 1fr; }
+          .hero-card       { display: none; }   /* hide floating card on tablet */
+          .features-grid   { grid-template-columns: repeat(2, 1fr); }
+          .footer-grid     { grid-template-columns: 1fr 1fr; }
+        }
+        @media (max-width: 820px) {
+          .nav-links { display: none; }
+          .hero-h1   { font-size: 2.8rem; }
+          .steps-grid { grid-template-columns: 1fr; }
+          .step-card::after { display: none; }
+          .stats-inner { grid-template-columns: repeat(2,1fr); }
+          .stat-item   { border-right: none; border-bottom: 1px solid rgba(255,255,255,.12); padding: 14px 0; }
+          .stat-item:last-child, .stat-item:nth-last-child(2) { border-bottom: none; }
+          .roles-grid  { grid-template-columns: 1fr; }
+          .testimonials-grid { grid-template-columns: 1fr; }
+          .course-row { grid-template-columns: 60px 1fr; }
+          .row-cta    {
+            grid-column: 1/-1; flex-direction: row; align-items: center;
+            border-left: none; border-top: 1px solid var(--bd-2); padding: 10px 14px;
+          }
+          .btn-enroll-sm { margin-left: auto; }
+        }
+        @media (max-width: 600px) {
+          .hero-h1 { font-size: 2.2rem; }
+          .features-grid { grid-template-columns: 1fr; }
+          .cta-h2 { font-size: 2.2rem; }
+          .container, .nav-inner, .footer-inner, .signup-strip-inner { padding: 0 18px; }
+        }
+        @media (max-width: 400px) {
+          .footer-grid { grid-template-columns: 1fr; }
+          .hero-h1 { font-size: 1.85rem; }
+        }
+    </style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════
+     NAVBAR — same as public_courses.html for brand consistency
+═══════════════════════════════════════════════════ -->
+<nav class="navbar">
+    <div class="nav-inner">
+        <a href="/" class="nav-logo">
+            <div class="logo-mark">📚</div>
+            CourseHub
+        </a>
+        <ul class="nav-links">
+            <li><a href="#how-it-works">How It Works</a></li>
+            <li><a href="#courses">Courses</a></li>
+            <li><a href="#features">Features</a></li>
+        </ul>
+        <div class="nav-ctas">
+            <a href="/login"><button class="btn-nav-ghost">Log In</button></a>
+            <a href="/signup"><button class="btn-nav-gold">Sign Up Free ✦</button></a>
+        </div>
+    </div>
+</nav>
+
+<!-- ═══════════════════════════════════════════════════
+     HERO — flagship section
+═══════════════════════════════════════════════════ -->
+<section class="hero">
+    <div class="container">
+        <div class="hero-grid">
+
+            <!-- Left: copy + CTAs -->
+            <div>
+                <div class="hero-tag">
+                    <span class="live"></span>
+                    Online Learning Platform
+                </div>
+                <h1 class="hero-h1">
+                    Learn Skills.<br>
+                    Build Things.<br>
+                    <span class="acc">Grow Your Career.</span>
+                </h1>
+                <p class="hero-sub">
+                    Expert-taught courses in development, design, and data science.
+                    Watch video lessons at your own pace, earn certificates, and
+                    build a portfolio that gets you hired.
+                </p>
+                <div class="hero-ctas">
+                    <a href="/signup"><button class="btn-hero-primary">🎓 Start Learning Free</button></a>
+                    <a href="/public-courses"><button class="btn-hero-ghost">Browse Courses →</button></a>
+                </div>
+                <!-- Social proof: fake avatars + text to build trust -->
+                <div class="hero-proof">
+                    <div class="proof-avatars">
+                        <div class="proof-avatar">R</div>
+                        <div class="proof-avatar">S</div>
+                        <div class="proof-avatar">P</div>
+                        <div class="proof-avatar">A</div>
+                    </div>
+                    <span class="proof-text"><strong>5,000+ students</strong> learning on CourseHub today</span>
+                </div>
+            </div>
+
+            <!-- Right: floating stats card -->
+            <div class="hero-card">
+                <div class="hero-card-title">📊 Platform at a Glance</div>
+                <!--
+                  THYMELEAF stat rows:
+                  th:text="${courseCount}"  → total courses from DB
+                  th:text="${freeCount}"    → free course count from DB
+                  Static numbers for trainers/students (connect to DB later)
+                -->
+                <div class="hstat-row">
+                    <div class="hstat-icon hsi-gold">📚</div>
+                    <div>
+                        <div class="hstat-num" th:text="${courseCount}">0</div>
+                        <div class="hstat-label">Courses Available</div>
+                    </div>
+                </div>
+                <div class="hstat-row">
+                    <div class="hstat-icon hsi-green">🆓</div>
+                    <div>
+                        <div class="hstat-num" th:text="${freeCount}">0</div>
+                        <div class="hstat-label">Free Courses</div>
+                    </div>
+                </div>
+                <div class="hstat-row">
+                    <div class="hstat-icon hsi-blue">🎓</div>
+                    <div>
+                        <div class="hstat-num">5K+</div>
+                        <div class="hstat-label">Students Enrolled</div>
+                    </div>
+                </div>
+                <div class="hstat-row">
+                    <div class="hstat-icon hsi-purple">🧑‍🏫</div>
+                    <div>
+                        <div class="hstat-num">50+</div>
+                        <div class="hstat-label">Expert Trainers</div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════
+     STATS STRIP
+═══════════════════════════════════════════════════ -->
+<div class="stats-strip">
+    <div class="stats-inner">
+        <!--
+          THYMELEAF: th:text="${courseCount} + '+'"
+          Or keep static if not wiring to DB yet.
+        -->
+        <div class="stat-item">
+            <span class="stat-num" th:text="${courseCount} + '+'">0+</span>
+            <div class="stat-label">Courses Available</div>
+        </div>
+        <div class="stat-item">
+            <span class="stat-num">50+</span>
+            <div class="stat-label">Expert Trainers</div>
+        </div>
+        <div class="stat-item">
+            <span class="stat-num">5,000+</span>
+            <div class="stat-label">Students Enrolled</div>
+        </div>
+        <div class="stat-item">
+            <span class="stat-num">∞</span>
+            <div class="stat-label">Lifetime Access</div>
+        </div>
+    </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════
+     HOW IT WORKS
+═══════════════════════════════════════════════════ -->
+<section class="section-white" id="how-it-works">
+    <div class="container">
+        <div class="sec-header">
+            <div class="sec-tag">Simple Process</div>
+            <h2 class="sec-title">How CourseHub Works</h2>
+            <p class="sec-sub">Three simple steps from signup to certificate. No complexity, no subscription, just learning.</p>
+        </div>
+        <div class="steps-grid">
+            <div class="step-card">
+                <div class="step-num">01</div>
+                <h3>Create Your Free Account</h3>
+                <p>Sign up as a Student or Trainer in under 60 seconds. Just your name, email, and password — no credit card needed to get started.</p>
+            </div>
+            <div class="step-card">
+                <div class="step-num">02</div>
+                <h3>Browse &amp; Enroll in Courses</h3>
+                <p>Students explore courses, add to cart, and pay once for lifetime access. Trainers create courses, add video lessons, and set prices.</p>
+            </div>
+            <div class="step-card">
+                <div class="step-num">03</div>
+                <h3>Learn, Progress, and Certify</h3>
+                <p>Watch video lessons at your pace, download study notes, and earn a verified certificate when you complete the course.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════
+     COURSE PREVIEW SECTION
+     Shows real courses from the DB (max 6).
+     THYMELEAF loops through ${courses} list.
+═══════════════════════════════════════════════════ -->
+<section class="section" id="courses">
+    <div class="container">
+        <div class="sec-header">
+            <div class="sec-tag">📚 Live From Database</div>
+            <h2 class="sec-title">Popular Courses</h2>
+            <p class="sec-sub">Real courses created by our trainers — enroll today and get lifetime access.</p>
+        </div>
+
+        <!--
+        ═══════════════════════════════════════════════════════════════
+        THYMELEAF — REPLACE STATIC ROWS WITH THIS BLOCK:
+
+        EMPTY STATE:
+          <div th:if="${#lists.isEmpty(courses)}" style="text-align:center;padding:40px;color:var(--tx-3);">
+            <p>No courses yet — trainers are creating content soon.</p>
+          </div>
+
+        DYNAMIC ROWS (max 6 — controller does .subList(0,6)):
+          <div class="courses-list" th:unless="${#lists.isEmpty(courses)}">
+
+            <div class="course-row"
+                 th:each="course, iter : ${courses}"
+                 th:style="'animation-delay:' + ${iter.index * 45} + 'ms'">
+
+              <div class="row-icon"
+                   th:classappend="${iter.index % 6 == 0} ? 'ri1' :
+                            (${iter.index % 6 == 1} ? 'ri2' :
+                            (${iter.index % 6 == 2} ? 'ri3' :
+                            (${iter.index % 6 == 3} ? 'ri4' :
+                            (${iter.index % 6 == 4} ? 'ri5' : 'ri6'))))">
+                📘
+                <span class="row-badge badge-free"
+                      th:if="${course.courseType == 'free'}">Free</span>
+                <span class="row-badge badge-paid"
+                      th:unless="${course.courseType == 'free'}">Paid</span>
+              </div>
+
+              <div class="row-info">
+                Course name — NO course ID shown:
+                  <div class="row-name" th:text="${course.courseName}">Name</div>
+                Trainer name BOLD:
+                  <div class="row-trainer">
+                    <div class="row-trainer-icon">👤</div>
+                    <span th:text="${course.trainerName}">Trainer</span>
+                  </div>
+                Lesson count:
+                  <div class="row-meta">
+                    <div class="row-chip">
+                      📖 <span th:text="${#lists.size(course.lessons)} + ' Lessons'">0</span>
+                    </div>
+                  </div>
+              </div>
+
+              <div class="row-cta">
+                Free:
+                  <div class="price-free" th:if="${course.courseType == 'free'}">Free</div>
+                Paid:
+                  <div class="price-paid" th:unless="${course.courseType == 'free'}"
+                       th:text="'₹' + ${course.coursePrice}">₹999</div>
+                Enroll → /login (visitor not logged in):
+                  <a href="/login">
+                    <button class="btn-enroll-sm"
+                            th:classappend="${course.courseType == 'free'} ? 'btn-enroll-free-sm' : ''">
+                      Enroll →
+                    </button>
+                  </a>
+              </div>
+
+            </div>
+          </div>
+        ═══════════════════════════════════════════════════════════════ -->
+
+
+
+
+
+        <div th:if="${#lists.isEmpty(courses)}" style="text-align:center;padding:40px;color:var(--tx-3);">
+            <p>No courses yet — trainers are creating content soon.</p>
+        </div>
+
+
+        <div class="courses-list" th:unless="${#lists.isEmpty(courses)}">
+
+            <div class="course-row"
+                 th:each="course, iter : ${courses}"
+                 th:style="'animation-delay:' + ${iter.index * 45} + 'ms'">
+
+                <div class="row-icon"
+                     th:classappend="${iter.index % 6 == 0} ? 'ri1' :
+                            (${iter.index % 6 == 1} ? 'ri2' :
+                            (${iter.index % 6 == 2} ? 'ri3' :
+                            (${iter.index % 6 == 3} ? 'ri4' :
+                            (${iter.index % 6 == 4} ? 'ri5' : 'ri6'))))">
+                    📘
+                    <span class="row-badge badge-free"
+                          th:if="${course.courseType == 'free'}">Free</span>
+                    <span class="row-badge badge-paid"
+                          th:unless="${course.courseType == 'free'}">Paid</span>
+                </div>
+
+                <div class="row-info">
+
+                    <div class="row-name" th:text="${course.courseName}">Name</div>
+
+                    <div class="row-trainer">
+                        <div class="row-trainer-icon">👤</div>
+                        <span th:text="${course.trainerName}">Trainer</span>
+                    </div>
+
+                    <div class="row-meta">
+                        <div class="row-chip">
+                            📖 <span th:text="${#lists.size(course.lessons)} + ' Lessons'">0</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row-cta">
+
+                    <div class="price-free" th:if="${course.courseType == 'free'}">Free</div>
+
+                    <div class="price-paid" th:unless="${course.courseType == 'free'}"
+                         th:text="'₹' + ${course.coursePrice}">₹999</div>
+
+                    <a href="/login">
+                        <button class="btn-enroll-sm"
+                                th:classappend="${course.courseType == 'free'} ? 'btn-enroll-free-sm' : ''">
+                            Enroll →
+
+                        </button>
+                    </a>
+
+
+
+
+                </div>
+
+            </div>
+        </div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        <!-- STATIC DEMO — remove when Thymeleaf backend connected -->
+        <!--<div class="courses-list">
+            <div class="course-row" style="animation-delay:0ms">
+                <div class="row-icon ri1">☕ <span class="row-badge badge-paid">Paid</span></div>
+                <div class="row-info">
+                    <div class="row-name">Spring Boot for Beginners — From Zero to REST API</div>
+                    <div class="row-trainer"><div class="row-trainer-icon">👤</div><span>Arjun Patel</span></div>
+                    <div class="row-meta"><div class="row-chip">📖 24 Lessons</div></div>
+                </div>
+                <div class="row-cta">
+                    <div class="price-paid">₹999</div>
+                    <a href="/login"><button class="btn-enroll-sm">Enroll →</button></a>
+                </div>
+            </div>
+            <div class="course-row" style="animation-delay:45ms">
+                <div class="row-icon ri2">🐍 <span class="row-badge badge-free">Free</span></div>
+                <div class="row-info">
+                    <div class="row-name">Python Programming — Complete Beginner's Guide</div>
+                    <div class="row-trainer"><div class="row-trainer-icon">👤</div><span>Sneha Roy</span></div>
+                    <div class="row-meta"><div class="row-chip">📖 18 Lessons</div></div>
+                </div>
+                <div class="row-cta">
+                    <div class="price-free">Free</div>
+                    <a href="/login"><button class="btn-enroll-sm btn-enroll-free-sm">Enroll →</button></a>
+                </div>
+            </div>
+            <div class="course-row" style="animation-delay:90ms">
+                <div class="row-icon ri3">🌐 <span class="row-badge badge-paid">Paid</span></div>
+                <div class="row-info">
+                    <div class="row-name">HTML, CSS &amp; JavaScript — Build Real Websites</div>
+                    <div class="row-trainer"><div class="row-trainer-icon">👤</div><span>Vikram Das</span></div>
+                    <div class="row-meta"><div class="row-chip">📖 30 Lessons</div></div>
+                </div>
+                <div class="row-cta">
+                    <div class="price-paid">₹799</div>
+                    <a href="/login"><button class="btn-enroll-sm">Enroll →</button></a>
+                </div>
+            </div>
+            <div class="course-row" style="animation-delay:135ms">
+                <div class="row-icon ri4">📊 <span class="row-badge badge-paid">Paid</span></div>
+                <div class="row-info">
+                    <div class="row-name">Data Analysis with Python and Pandas</div>
+                    <div class="row-trainer"><div class="row-trainer-icon">👤</div><span>Priya Mehta</span></div>
+                    <div class="row-meta"><div class="row-chip">📖 22 Lessons</div></div>
+                </div>
+                <div class="row-cta">
+                    <div class="price-paid">₹1,299</div>
+                    <a href="/login"><button class="btn-enroll-sm">Enroll →</button></a>
+                </div>
+            </div>
+        </div>-->
+
+        <div class="view-all-row">
+            <a href="/public-courses">
+                <button class="btn-view-all">View All Courses →</button>
+            </a>
+        </div>
+    </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════
+     FEATURES
+═══════════════════════════════════════════════════ -->
+<section class="section-white" id="features">
+    <div class="container">
+        <div class="sec-header">
+            <div class="sec-tag">Platform Features</div>
+            <h2 class="sec-title">Everything You Need to Learn Well</h2>
+            <p class="sec-sub">CourseHub gives trainers tools to teach effectively, and students the right place to learn properly.</p>
+        </div>
+        <div class="features-grid">
+            <div class="feat-card"><div class="feat-icon fi-1">🎥</div><h3>HD Video Lessons</h3><p>Stream every lesson in high quality on any device. Learn on your schedule, pause and replay anytime.</p></div>
+            <div class="feat-card"><div class="feat-icon fi-2">📄</div><h3>Downloadable Notes</h3><p>PDF study materials attached to every lesson so you can study offline whenever you want.</p></div>
+            <div class="feat-card"><div class="feat-icon fi-3">🛒</div><h3>Simple Cart &amp; Checkout</h3><p>Add multiple courses to cart and pay once. Instant lifetime access after payment — no subscription needed.</p></div>
+            <div class="feat-card"><div class="feat-icon fi-4">💬</div><h3>Q&amp;A Discussion</h3><p>Ask questions on any lesson and get direct answers from your trainer. Learning is a conversation.</p></div>
+            <div class="feat-card"><div class="feat-icon fi-5">🏆</div><h3>Verified Certificates</h3><p>Earn a certificate on course completion — shareable directly on LinkedIn or your resume.</p></div>
+            <div class="feat-card"><div class="feat-icon fi-6">📱</div><h3>Learn Anywhere</h3><p>Fully responsive design. Pick up exactly where you left off on any screen size, any device.</p></div>
+        </div>
+    </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════
+     STUDENT vs TRAINER ROLES
+═══════════════════════════════════════════════════ -->
+<section class="section">
+    <div class="container">
+        <div class="sec-header">
+            <div class="sec-tag">Choose Your Path</div>
+            <h2 class="sec-title">Built for Both Learners &amp; Teachers</h2>
+            <p class="sec-sub">Whether you want to grow your skills or share your expertise, CourseHub has you covered.</p>
+        </div>
+        <div class="roles-grid">
+            <!-- Student card -->
+            <div class="role-card role-card-student">
+                <div class="role-icon">🎓</div>
+                <h3>I'm a Student</h3>
+                <p>Browse expert-built courses, enroll at your own pace, and earn certificates that prove your new skills.</p>
+                <div class="role-perks">
+                    <div class="role-perk"><div class="perk-check">✓</div>Browse 200+ courses for free</div>
+                    <div class="role-perk"><div class="perk-check">✓</div>Add to cart — pay once, access forever</div>
+                    <div class="role-perk"><div class="perk-check">✓</div>Earn verified certificates</div>
+                    <div class="role-perk"><div class="perk-check">✓</div>Watch on any device, anytime</div>
+                </div>
+                <a href="/signup"><button class="btn-role btn-role-student">🎓 Start Learning Free</button></a>
+            </div>
+            <!-- Trainer card -->
+            <div class="role-card role-card-trainer">
+                <div class="role-icon">🧑‍🏫</div>
+                <h3>I'm a Trainer</h3>
+                <p>Create your courses, add video lessons, set your own price, and reach thousands of students ready to learn.</p>
+                <div class="role-perks">
+                    <div class="role-perk"><div class="perk-check">✓</div>Create unlimited courses</div>
+                    <div class="role-perk"><div class="perk-check">✓</div>Set your own pricing</div>
+                    <div class="role-perk"><div class="perk-check">✓</div>Track student progress</div>
+                    <div class="role-perk"><div class="perk-check">✓</div>Build your teaching portfolio</div>
+                </div>
+                <a href="/signup"><button class="btn-role btn-role-trainer">🧑‍🏫 Start Teaching</button></a>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════
+     TESTIMONIALS
+═══════════════════════════════════════════════════ -->
+<section class="section-white">
+    <div class="container">
+        <div class="sec-header">
+            <div class="sec-tag">Student Reviews</div>
+            <h2 class="sec-title">What Our Students Say</h2>
+            <p class="sec-sub">Real feedback from students who've built real skills on CourseHub.</p>
+        </div>
+        <div class="testimonials-grid">
+            <div class="testi-card">
+                <div class="testi-stars">★★★★★</div>
+                <p class="testi-text">"The Spring Boot course took me from zero backend knowledge to landing a backend developer role in 4 months. The video lessons are incredibly clear."</p>
+                <div class="testi-author">
+                    <div class="testi-avatar av1">R</div>
+                    <div><div class="testi-name">Rahul Sharma</div><div class="testi-role">Backend Developer, Bangalore</div></div>
+                </div>
+            </div>
+            <div class="testi-card">
+                <div class="testi-stars">★★★★★</div>
+                <p class="testi-text">"I finished the Python course in two weeks. It's completely free and better than paid courses I've tried elsewhere. The notes were a huge help."</p>
+                <div class="testi-author">
+                    <div class="testi-avatar av2">S</div>
+                    <div><div class="testi-name">Sneha Patil</div><div class="testi-role">Data Analyst, Pune</div></div>
+                </div>
+            </div>
+            <div class="testi-card">
+                <div class="testi-stars">★★★★★</div>
+                <p class="testi-text">"As a trainer, setting up my courses was incredibly easy. Within a week I had 50 students enrolled. The platform handles everything for me."</p>
+                <div class="testi-author">
+                    <div class="testi-avatar av3">A</div>
+                    <div><div class="testi-name">Arjun Mehta</div><div class="testi-role">Trainer &amp; Full-stack Developer</div></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════
+     FINAL CTA
+═══════════════════════════════════════════════════ -->
+<section class="cta-section">
+    <div class="container cta-inner">
+        <div class="cta-label">🚀 Start Today</div>
+        <h2 class="cta-h2">
+            Your Next Skill Is<br>
+            <span>One Course Away.</span>
+        </h2>
+        <p class="cta-sub">
+            Create a free account in under 60 seconds. Browse every course,
+            enroll in free ones immediately, and unlock paid courses anytime —
+            no subscription, no recurring charges.
+        </p>
+        <div class="cta-btns">
+            <a href="/signup"><button class="btn-hero-primary">🎓 Create Free Account</button></a>
+            <a href="/login"><button class="btn-hero-ghost">Log In →</button></a>
+        </div>
+    </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════
+     FOOTER — matches public_courses.html exactly
+═══════════════════════════════════════════════════ -->
+<footer>
+    <div class="footer-inner">
+        <div class="footer-grid">
+            <div>
+                <span class="footer-brand">CourseHub</span>
+                <p class="footer-about">An online learning platform connecting expert trainers with ambitious students who want to grow their skills and careers.</p>
+            </div>
+            <div class="footer-col">
+                <h5>Platform</h5>
+                <ul>
+                    <li><a href="/public-courses">Browse Courses</a></li>
+                    <li><a href="/signup">Become a Trainer</a></li>
+                    <li><a href="#">Certificates</a></li>
+                    <li><a href="#">Pricing</a></li>
+                </ul>
+            </div>
+            <div class="footer-col">
+                <h5>Company</h5>
+                <ul>
+                    <li><a href="#">About Us</a></li>
+                    <li><a href="#">Blog</a></li>
+                    <li><a href="#">Contact</a></li>
+                </ul>
+            </div>
+            <div class="footer-col">
+                <h5>Support</h5>
+                <ul>
+                    <li><a href="#">Help Center</a></li>
+                    <li><a href="#">Terms of Service</a></li>
+                    <li><a href="#">Privacy Policy</a></li>
+                    <li><a href="#">Refund Policy</a></li>
+                </ul>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <span>© 2026 CourseHub. All rights reserved.</span>
+            <span>Built with <a href="#">Spring Boot</a> &amp; Thymeleaf</span>
+        </div>
+    </div>
+</footer>
+
+</body>
+</html>

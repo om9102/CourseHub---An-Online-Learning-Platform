@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<!--
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                  my_courses.html — STUDENT'S PURCHASED COURSES               ║
+╠══════════════════════════════════════════════════════════════════════════════╣
+║                                                                              ║
+║  PURPOSE: Shows ONLY courses the student has purchased.                      ║
+║  Clicking "Continue Learning" opens the inline lesson viewer.                ║
+║                                                                              ║
+║  BACKEND CODE TO ADD — NavController.java                                    ║
+║  ──────────────────────────────────────────                                  ║
+║                                                                              ║
+║  @GetMapping("/my-courses")                                                  ║
+║  public String myCourses(HttpSession session, Model model) {                 ║
+║                                                                              ║
+║      // 1. Get enrolled courses from session                                 ║
+║      //    (After checkout, CartController saves to session)                 ║
+║      Object enrolled = session.getAttribute("enrolledCourses");             ║
+║      List<Course> enrolledCourses = (enrolled instanceof List) ?            ║
+║                                     (List<Course>) enrolled :               ║
+║                                     new ArrayList<>();                       ║
+║                                                                              ║
+║      // 2. Cart count for navbar                                             ║
+║      Object cart = session.getAttribute("cart");                             ║
+║      int cartCount = (cart instanceof List) ? ((List)cart).size() : 0;      ║
+║      model.addAttribute("cartCount", cartCount);                             ║
+║                                                                              ║
+║      model.addAttribute("enrolledCourses", enrolledCourses);                ║
+║      return "Home/my_courses";                                               ║
+║  }                                                                           ║
+║                                                                              ║
+║  ── ALSO ADD TO CartController.checkout() ──                                 ║
+║  After payment, move cart items to enrolled list:                            ║
+║                                                                              ║
+║    @GetMapping("/checkout")                                                  ║
+║    public String checkout(HttpSession session, Model model) {                ║
+║        List<Course> cart = getCart(session);                                 ║
+║                                                                              ║
+║        // Move cart → enrolled courses                                       ║
+║        List<Course> enrolled = getEnrolled(session);                        ║
+║        for (Course c : cart) {                                               ║
+║            boolean alreadyEnrolled = enrolled.stream()                      ║
+║                .anyMatch(e -> e.getCourseId().equals(c.getCourseId()));      ║
+║            if (!alreadyEnrolled) enrolled.add(c);                           ║
+║        }                                                                     ║
+║        session.setAttribute("enrolledCourses", enrolled);                  ║
+║        session.removeAttribute("cart");                                     ║
+║        session.setAttribute("cartCount", 0);                                ║
+║        return "redirect:/my-courses"; // Go to My Courses after purchase    ║
+║    }                                                                         ║
+║                                                                              ║
+║    // Helper to get or create enrolled list from session                     ║
+║    private List<Course> getEnrolled(HttpSession session) {                  ║
+║        Object obj = session.getAttribute("enrolledCourses");                ║
+║        if (obj instanceof List) return (List<Course>) obj;                  ║
+║        return new ArrayList<>();                                             ║
+║    }                                                                         ║
+║                                                                              ║
+║  THYMELEAF FIELDS:                                                           ║
+║  ${enrolledCourses}                 → List<Course> from session              ║
+║  th:each="course : ${enrolledCourses}" → loop over enrolled courses         ║
+║  ${course.courseName}               → course.getCourseName()                 ║
+║  ${course.trainerName}              → course.getTrainerName()                ║
+║  ${#lists.size(course.lessons)}     → total lessons in course                ║
+║  th:each="lesson : ${course.lessons}" → loop lessons inside course          ║
+║  ${lesson.lessonName}               → lesson.getLessonName()                 ║
+║  ${lesson.lessonTopic}              → lesson.getLessonTopic()                ║
+║  ${lesson.lessonDescription}        → lesson.getLessonDescription()          ║
+║  ${lesson.lessonVideoLink}          → lesson.getLessonVideoLink()            ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+-->
+
+
+
+<!--
+╔══════════════════════════════════════════════════════════════════════════════╗
+║              student_enrolled_courses.html — MY ENROLLED COURSES             ║
+║                        UPDATED: Click → Go to /course/{courseId}             ║
+╠══════════════════════════════════════════════════════════════════════════════╣
+║  BACKEND ENDPOINT:  GET /my-courses                                           ║
+║  Controller:        StudentController.myCourses(session, model)               ║
+║  Model attributes:  enrolledCourses (List<Course>), cartCount (int)           ║
+║                                                                               ║
+║  THYMELEAF FIELDS:                                                            ║
+║  ${session.user.firstname}          → student name                            ║
+║  ${enrolledCourses}                 → List<Course> from session/DB            ║
+║  th:each="course, iter : ${...}"    → loop over enrolled courses              ║
+║  ${course.courseName}               → name                                    ║
+║  ${course.trainerName}              → trainer name                            ║
+║  ${course.courseType}               → "free" or "paid"                        ║
+║  ${course.coursePrice}              → price string                            ║
+║  ${#lists.size(course.lessons)}     → total lessons                           ║
+║  th:href="@{/course/{id}(id=${course.courseId})}" → View Details link         ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+-->
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My Courses — Course Hub</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&family=Playfair+Display:wght@700;800;900&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+      --midnight: #0c0e1a; --navy: #0f172a;
+      --blue-deep: #1e3a8a; --blue: #2563eb; --blue-lt: #3b82f6; --blue-soft: #eff6ff;
+      --gold: #f59e0b; --gold-pale: #fef3c7;
+      --bg: #f4f7ff; --card: #ffffff; --surface-2: #f8faff; --surface-3: #eef2ff;
+      --tx: #0f172a; --tx-2: #374151; --tx-3: #6b7280; --tx-4: #9ca3af;
+      --bd: #e5e7eb; --bd-2: #f0f2f9;
+      --green: #059669; --green-bg: #ecfdf5; --red: #dc2626;
+      --sh-sm: 0 1px 4px rgba(15,23,42,.05); --sh-md: 0 4px 16px rgba(30,58,138,.08);
+      --sh-lg: 0 12px 36px rgba(30,58,138,.13); --sh-xl: 0 24px 64px rgba(30,58,138,.18);
+      --ff-head: 'Playfair Display', Georgia, serif;
+      --ff-body: 'DM Sans', system-ui, sans-serif;
+      --r-sm: 8px; --r: 12px; --r-lg: 18px; --r-xl: 24px; --rl: 18px;
+      --ease: .2s cubic-bezier(.4,0,.2,1);
+    }
+    body { font-family: var(--ff-body); background: var(--bg); color: var(--tx); font-size: 15px; line-height: 1.6; }
+    a { text-decoration: none; color: inherit; }
+    ul { list-style: none; }
+
+    /* NAVBAR */
+    .navbar { background: var(--midnight); position: sticky; top: 0; z-index: 500; box-shadow: 0 1px 0 rgba(255,255,255,.05), 0 4px 20px rgba(0,0,0,.3); }
+    .nav-inner { max-width: 1240px; margin: 0 auto; padding: 0 28px; height: 66px; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+    .nav-logo { display: flex; align-items: center; gap: 9px; font-family: var(--ff-head); font-size: 1.45rem; font-weight: 900; color: #fff; letter-spacing: -.03em; flex-shrink: 0; }
+    .logo-mark { width: 32px; height: 32px; background: var(--gold); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: .9rem; }
+    .nav-links { display: flex; align-items: center; gap: 2px; }
+    .nav-links a { font-size: .87rem; font-weight: 500; color: rgba(255,255,255,.6); padding: 7px 13px; border-radius: var(--r-sm); transition: all var(--ease); }
+    .nav-links a:hover, .nav-links a.active { color: #fff; background: rgba(255,255,255,.08); }
+    .nav-links a.active { color: var(--gold); }
+    .nav-right { display: flex; align-items: center; gap: 10px; position: relative; }
+    .nav-badge { background: rgba(245,158,11,.18); color: var(--gold); font-size: .71rem; font-weight: 700; padding: 3px 10px; border-radius: 20px; border: 1px solid rgba(245,158,11,.3); }
+    .nav-name { font-size: .83rem; color: rgba(255,255,255,.72); font-weight: 500; }
+    .cart-wrap { position: relative; }
+    .btn-cart { display: flex; align-items: center; gap: 6px; padding: 8px 16px; font-family: var(--ff-body); font-size: .84rem; font-weight: 600; color: #fff; background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.2); border-radius: var(--r-sm); cursor: pointer; transition: all var(--ease); }
+    .btn-cart:hover { background: rgba(255,255,255,.18); }
+    .cart-badge { position: absolute; top: -6px; right: -6px; background: var(--red); color: #fff; font-size: .62rem; font-weight: 800; width: 18px; height: 18px; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+    .btn-nav-ghost { padding: 8px 16px; font-family: var(--ff-body); font-size: .84rem; font-weight: 600; color: rgba(255,255,255,.8); background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.15); border-radius: var(--r-sm); cursor: pointer; transition: all var(--ease); }
+    .btn-nav-ghost:hover { background: rgba(255,255,255,.16); color: #fff; }
+    .btn-menu { display: flex; align-items: center; gap: 7px; padding: 7px 16px; font-family: var(--ff-body); font-size: .83rem; font-weight: 700; background: var(--gold); color: var(--midnight); border: none; border-radius: 8px; cursor: pointer; transition: all var(--ease); }
+    .btn-menu:hover { background: #fbbf24; transform: translateY(-1px); }
+
+    /* DROPDOWN */
+    .menu-dd { position: absolute; top: calc(100% + 12px); right: 0; background: var(--card); border: 1px solid var(--bd); border-radius: var(--rl); box-shadow: var(--sh-xl); min-width: 240px; padding: 8px 0; z-index: 600; display: none; animation: menuIn .18s ease; }
+    @keyframes menuIn { from{opacity:0;transform:translateY(-8px)} to{opacity:1;transform:translateY(0)} }
+    .menu-dd.open { display: block; }
+    .menu-ui { padding: 14px 18px 12px; border-bottom: 1px solid var(--bd); margin-bottom: 4px; }
+    .menu-uname { font-size: .92rem; font-weight: 700; color: var(--tx); margin-bottom: 2px; }
+    .menu-uemail { font-size: .76rem; color: var(--tx-3); }
+    .menu-urole { display: inline-block; background: var(--gold-pale); color: #92400e; font-size: .67rem; font-weight: 700; padding: 2px 8px; border-radius: 10px; margin-top: 4px; }
+    .mi { display: flex; align-items: center; gap: 12px; padding: 10px 18px; font-size: .86rem; font-weight: 500; color: var(--tx); cursor: pointer; transition: background var(--ease); }
+    .mi:hover { background: var(--surface-3); color: var(--blue-deep); }
+    .mi.danger { color: var(--red); }
+    .mi.danger:hover { background: #fef2f2; }
+    .mi.current { background: var(--surface-3); color: var(--blue-deep); font-weight: 600; }
+    .mi-icon { font-size: 1rem; width: 22px; text-align: center; flex-shrink: 0; }
+    .menu-div { border: none; border-top: 1px solid var(--bd); margin: 5px 0; }
+
+    /* HERO */
+    .hero { background: var(--midnight); background-image: radial-gradient(ellipse 70% 60% at 65% 50%, rgba(37,99,235,.3) 0%, transparent 60%); padding: 52px 0 44px; color: #fff; position: relative; overflow: hidden; }
+    .hero::before { content: ''; position: absolute; inset: 0; background-image: radial-gradient(circle, rgba(255,255,255,.04) 1px, transparent 1px); background-size: 28px 28px; pointer-events: none; }
+    .container { max-width: 1240px; margin: 0 auto; padding: 0 28px; position: relative; z-index: 1; }
+    .breadcrumb { display: flex; align-items: center; gap: 8px; font-size: .78rem; color: rgba(255,255,255,.45); margin-bottom: 22px; }
+    .breadcrumb a { color: rgba(255,255,255,.7); font-weight: 500; }
+    .hero-label { display: inline-flex; align-items: center; gap: 8px; background: rgba(245,158,11,.15); border: 1px solid rgba(245,158,11,.3); color: var(--gold); font-size: .73rem; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; padding: 5px 14px; border-radius: 30px; margin-bottom: 16px; }
+    .hero-title { font-family: var(--ff-head); font-size: 2.8rem; font-weight: 900; line-height: 1.1; letter-spacing: -.04em; margin-bottom: 12px; }
+    .hero-title .acc { color: var(--gold); }
+    .hero-sub { font-size: .93rem; color: rgba(255,255,255,.65); max-width: 500px; line-height: 1.8; }
+
+    /* MAIN */
+    .main { padding: 44px 0 80px; }
+
+    /* COURSE CARDS */
+    .courses-wrap { display: flex; flex-direction: column; gap: 20px; }
+
+    /*
+      COURSE CARD — horizontal layout
+      Clicking "View Course" → /course/{courseId}
+      No inline lesson expansion anymore
+    */
+    .course-card {
+      background: var(--card); border: 1px solid var(--bd-2); border-radius: var(--r-xl);
+      overflow: hidden; box-shadow: var(--sh-sm);
+      transition: box-shadow var(--ease), transform var(--ease);
+      display: grid; grid-template-columns: 80px 1fr auto;
+      align-items: center; gap: 0;
+      animation: cardIn .45s ease both;
+    }
+    @keyframes cardIn { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
+    .course-card:hover { box-shadow: var(--sh-md); transform: translateY(-2px); }
+
+    /* Left colour strip */
+    .card-strip {
+      width: 80px; align-self: stretch;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      font-size: 2rem; gap: 6px; flex-shrink: 0; position: relative;
+    }
+    .cs-1 { background: linear-gradient(180deg,#1e3a8a,#2563eb); }
+    .cs-2 { background: linear-gradient(180deg,#064e3b,#10b981); }
+    .cs-3 { background: linear-gradient(180deg,#6d28d9,#a78bfa); }
+    .cs-4 { background: linear-gradient(180deg,#92400e,#f59e0b); }
+    .cs-5 { background: linear-gradient(180deg,#9f1239,#f43f5e); }
+    .cs-6 { background: linear-gradient(180deg,#0c4a6e,#0ea5e9); }
+
+    .card-type-tag {
+      font-size: .55rem; font-weight: 800; text-transform: uppercase;
+      letter-spacing: .06em; padding: 2px 6px; border-radius: 20px; margin-top: 4px;
+    }
+    .tag-free { background: rgba(16,185,129,.9); color: #fff; }
+    .tag-paid { background: rgba(255,255,255,.92); color: var(--blue-deep); }
+
+    /* Card body */
+    .card-body { padding: 20px 24px; min-width: 0; }
+    .card-badges { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+    .badge { display: inline-block; font-size: .63rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; padding: 3px 10px; border-radius: 20px; }
+    .badge-enrolled { background: var(--green-bg); color: var(--green); }
+
+    .card-title { font-family: var(--ff-head); font-size: 1.05rem; font-weight: 700; color: var(--tx); margin-bottom: 5px; line-height: 1.35; }
+    .card-trainer { font-size: .82rem; font-weight: 700; color: var(--blue); margin-bottom: 8px; }
+    .card-meta { display: flex; align-items: center; gap: 16px; font-size: .76rem; color: var(--tx-3); flex-wrap: wrap; }
+    .card-meta-item { display: flex; align-items: center; gap: 4px; }
+
+    /* Right action area */
+    .card-right {
+      padding: 20px 24px 20px 0; display: flex; flex-direction: column;
+      align-items: flex-end; justify-content: center; gap: 10px; flex-shrink: 0;
+    }
+    .card-price { font-family: var(--ff-head); font-size: 1.15rem; font-weight: 900; color: var(--blue-deep); }
+    .card-price-free { font-family: var(--ff-head); font-size: 1.15rem; font-weight: 900; color: var(--green); }
+
+    /*
+      VIEW COURSE BUTTON
+      THYMELEAF: th:href="@{/course/{id}(id=${course.courseId})}"
+      → Navigates to student_course_lesson_details.html
+      → Shows all topics + lessons for this specific course
+    */
+    .btn-view-course {
+      display: inline-flex; align-items: center; gap: 7px;
+      padding: 10px 20px; font-family: var(--ff-body); font-size: .84rem; font-weight: 700;
+      color: #fff; background: var(--blue-deep); border: none;
+      border-radius: var(--r-sm); cursor: pointer; transition: all var(--ease); white-space: nowrap;
+    }
+    .btn-view-course:hover { background: var(--blue); transform: translateX(2px); }
+    .btn-view-course .arrow { transition: transform .2s; }
+    .btn-view-course:hover .arrow { transform: translateX(3px); }
+
+    /* EMPTY STATE */
+    .empty-state { text-align: center; padding: 80px 24px; background: var(--card); border: 2px dashed var(--bd); border-radius: var(--r-xl); }
+    .empty-icon { font-size: 3.5rem; margin-bottom: 16px; }
+    .empty-title { font-family: var(--ff-head); font-size: 1.3rem; font-weight: 700; color: var(--tx); margin-bottom: 8px; }
+    .empty-sub { font-size: .88rem; color: var(--tx-3); max-width: 340px; margin: 0 auto 24px; }
+    .btn-browse { padding: 12px 28px; font-family: var(--ff-body); font-size: .9rem; font-weight: 700; color: var(--midnight); background: var(--gold); border: none; border-radius: var(--r-sm); cursor: pointer; transition: all var(--ease); }
+    .btn-browse:hover { background: #fbbf24; transform: translateY(-1px); }
+
+    /* BOTTOM NAV */
+    .bottom-nav { margin-top: 36px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 14px; }
+    .bottom-links { display: flex; gap: 8px; flex-wrap: wrap; }
+    .btn-nav { display: flex; align-items: center; gap: 6px; padding: 9px 16px; font-family: var(--ff-body); font-size: .84rem; font-weight: 600; color: var(--tx-2); background: var(--card); border: 1px solid var(--bd); border-radius: var(--r-sm); cursor: pointer; transition: all var(--ease); }
+    .btn-nav:hover { background: var(--blue-soft); color: var(--blue-deep); border-color: #bfdbfe; }
+    .btn-nav.primary { background: var(--blue-deep); color: #fff; border-color: var(--blue-deep); }
+    .btn-nav.primary:hover { background: var(--blue); }
+
+    /* FOOTER */
+    footer { background: var(--navy); color: rgba(255,255,255,.4); padding: 28px 0; }
+    .footer-inner { max-width: 1240px; margin: 0 auto; padding: 0 28px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; font-size: .82rem; }
+    footer a { color: var(--gold); }
+
+    /* RESPONSIVE */
+    @media (max-width: 768px) {
+      .nav-links { display: none; }
+      .course-card { grid-template-columns: 64px 1fr; }
+      .card-right { grid-column: 1/-1; flex-direction: row; align-items: center; justify-content: space-between; padding: 0 16px 16px; border-top: 1px solid var(--bd-2); padding-top: 12px; }
+      .hero-title { font-size: 2rem; }
+    }
+    @media (max-width: 480px) { .nav-inner, .container { padding: 0 18px; } .nav-name, .nav-badge { display: none; } }
+
+
+
+    /* SUCCESS TOAST */
+.toast-wrap {
+  position: fixed; bottom: 28px; right: 28px; z-index: 9999;
+  background: #fff; border: 1px solid #d1fae5; border-radius: 14px;
+  box-shadow: 0 8px 32px rgba(5,150,105,.18), 0 2px 8px rgba(0,0,0,.08);
+  max-width: 380px; overflow: hidden;
+  animation: toastIn .4s cubic-bezier(.34,1.56,.64,1) both;
+}
+@keyframes toastIn {
+  from { opacity:0; transform: translateY(20px) scale(.95); }
+  to   { opacity:1; transform: translateY(0) scale(1); }
+}
+.toast-wrap.hiding {
+  animation: toastOut .35s ease forwards;
+}
+@keyframes toastOut {
+  to { opacity:0; transform: translateY(16px) scale(.96); }
+}
+.toast-inner {
+  display: flex; align-items: flex-start; gap: 14px; padding: 18px 20px;
+}
+.toast-icon { font-size: 1.6rem; flex-shrink: 0; margin-top: 2px; }
+.toast-content { flex: 1; }
+.toast-title { font-weight: 700; font-size: .93rem; color: #064e3b; margin-bottom: 3px; }
+.toast-sub { font-size: .79rem; color: #047857; line-height: 1.5; }
+.toast-close {
+  background: none; border: none; cursor: pointer; color: #9ca3af;
+  font-size: 1rem; padding: 2px 4px; flex-shrink: 0; transition: color .2s;
+}
+.toast-close:hover { color: #374151; }
+/* Progress bar at bottom — drains left over 5 seconds */
+.toast-progress {
+  height: 3px; background: #059669;
+  animation: progressDrain 5s linear forwards;
+}
+@keyframes progressDrain {
+  from { width: 100%; }
+  to   { width: 0%; }
+}
+@media (max-width: 480px) {
+  .toast-wrap { bottom: 16px; right: 16px; left: 16px; max-width: none; }
+}
+
+
+
+  </style>
+</head>
+<body>
+
+
+
+<!-- SUCCESS TOAST — shown after free course enrollment -->
+<div class="toast-wrap" id="enrollToast" th:if="${enrolledSuccess}">
+  <div class="toast-inner">
+    <div class="toast-icon">🎉</div>
+    <div class="toast-content">
+      <div class="toast-title">Enrollment Successful!</div>
+      <div class="toast-sub">Your free courses have been added to your library. Start learning now.</div>
+    </div>
+    <button class="toast-close" onclick="dismissToast()">✕</button>
+  </div>
+  <div class="toast-progress" id="toastProgress"></div>
+</div>
+
+
+
+<!-- NAVBAR -->
+<nav class="navbar">
+  <div class="nav-inner">
+    <a href="/student-home" class="nav-logo">
+      <div class="logo-mark">📚</div>
+      CourseHub
+    </a>
+    <ul class="nav-links">
+      <li><a href="/my-courses" class="active">My Courses</a></li>
+      <li><a href="/all-courses">Browse</a></li>
+    </ul>
+    <div class="nav-right">
+      <span class="nav-badge">🎓 Student</span>
+      <!-- th:text="${session.user.firstname}" -->
+      <span class="nav-name" th:text="${session.user.firstname}">Om</span>
+      <a href="/student-home"><button class="btn-nav-ghost">← Dashboard</button></a>
+      <div class="cart-wrap">
+        <a href="/cart"><button class="btn-cart">🛒 Cart</button></a>
+        <span class="cart-badge" th:if="${cartCount != null and cartCount > 0}" th:text="${cartCount}">0</span>
+      </div>
+      <button class="btn-menu" id="menuToggle">☰ Menu</button>
+      <div class="menu-dd" id="menuDd">
+        <div class="menu-ui">
+          <div class="menu-uname" th:text="${session.user.firstname} + ' ' + ${session.user.lastname}">Om Prakash</div>
+          <div class="menu-uemail" th:text="${session.user.email}">om@gmail.com</div>
+          <div class="menu-urole">🎓 Student</div>
+        </div>
+        <a href="/student-profile"><div class="mi"><span class="mi-icon">👤</span>Profile</div></a>
+        <a href="/my-courses"><div class="mi current"><span class="mi-icon">📚</span>My Enrolled Courses</div></a>
+        <a href="/cart"><div class="mi"><span class="mi-icon">🛒</span>My Cart<span style="margin-left:auto;font-size:.73rem;color:var(--blue);font-weight:700" th:if="${cartCount != null and cartCount > 0}" th:text="'(' + ${cartCount} + ')'"></span></div></a>
+        <a href="/all-courses"><div class="mi"><span class="mi-icon">🔍</span>Explore Courses</div></a>
+        <hr class="menu-div">
+        <a href="/logout"><div class="mi danger"><span class="mi-icon">🚪</span>Logout</div></a>
+      </div>
+    </div>
+  </div>
+</nav>
+
+<!-- HERO -->
+<div class="hero">
+  <div class="container">
+    <nav class="breadcrumb">
+      <a href="/student-home">Dashboard</a>
+      <span>›</span>
+      <span>My Courses</span>
+    </nav>
+    <div class="hero-label">🎓 Your Learning Library</div>
+    <h1 class="hero-title">My <span class="acc">Enrolled</span> Courses</h1>
+    <p class="hero-sub">All courses you have purchased. Click "View Course" to see all lessons and start learning.</p>
+  </div>
+</div>
+
+<!-- MAIN -->
+<main class="main">
+  <div class="container">
+
+    <!--
+      EMPTY STATE
+      THYMELEAF: th:if="${#lists.isEmpty(enrolledCourses)}"
+    -->
+    <div class="empty-state" th:if="${#lists.isEmpty(enrolledCourses)}">
+      <div class="empty-icon">📭</div>
+      <div class="empty-title">No Courses Enrolled Yet</div>
+      <p class="empty-sub">Browse the catalogue, add courses to cart, and checkout to start learning.</p>
+      <a href="/all-courses"><button class="btn-browse">Browse All Courses →</button></a>
+    </div>
+
+    <!--
+      COURSE CARDS LOOP
+      THYMELEAF: th:unless="${#lists.isEmpty(enrolledCourses)}"
+                 th:each="course, iter : ${enrolledCourses}"
+
+      KEY CHANGE FROM OLD VERSION:
+      Instead of expanding lessons inline, clicking "View Course" navigates to:
+        /course/{courseId}  →  student_course_lesson_details.html
+
+      This page shows the full breakdown of topics and lessons for that course.
+    -->
+    <div class="courses-wrap" th:unless="${#lists.isEmpty(enrolledCourses)}">
+
+      <div class="course-card"
+           th:each="course, iter : ${enrolledCourses}"
+           th:style="'animation-delay:' + ${iter.index * 70} + 'ms'">
+
+        <!-- Colour strip — cycles 6 gradients -->
+        <div class="card-strip"
+             th:classappend="${iter.index % 6 == 0} ? 'cs-1' :
+                      (${iter.index % 6 == 1} ? 'cs-2' :
+                      (${iter.index % 6 == 2} ? 'cs-3' :
+                      (${iter.index % 6 == 3} ? 'cs-4' :
+                      (${iter.index % 6 == 4} ? 'cs-5' : 'cs-6'))))">
+          📘
+          <span class="card-type-tag tag-free" th:if="${course.courseType == 'free'}">Free</span>
+          <span class="card-type-tag tag-paid" th:unless="${course.courseType == 'free'}">Paid</span>
+        </div>
+
+        <!-- Course info -->
+        <div class="card-body">
+          <div class="card-badges">
+            <span class="badge badge-enrolled">✅ Enrolled</span>
+          </div>
+          <!--
+            THYMELEAF: th:text="${course.courseName}"
+            Course ID intentionally not shown — used only in href for routing.
+          -->
+          <div class="card-title" th:text="${course.courseName}">Course Name</div>
+          <!-- th:text="'👤 ' + ${course.trainerName}" -->
+          <div class="card-trainer" th:text="'👤 ' + ${course.trainerName}">👤 Trainer Name</div>
+          <div class="card-meta">
+            <div class="card-meta-item">📖 <span th:text="${#lists.size(course.lessons)} + ' Lessons'">0 Lessons</span></div>
+            <div class="card-meta-item">⏱ Self-paced</div>
+            <div class="card-meta-item">♾️ Lifetime access</div>
+          </div>
+        </div>
+
+        <!-- Right: price + view button -->
+        <div class="card-right">
+          <div class="card-price-free" th:if="${course.courseType == 'free'}">Free</div>
+          <div class="card-price" th:unless="${course.courseType == 'free'}" th:text="'₹' + ${course.coursePrice}">₹999</div>
+
+          <!--
+            VIEW COURSE BUTTON
+            THYMELEAF: th:href="@{/course/{id}(id=${course.courseId})}"
+
+            Navigates to: GET /course/JAVA101
+            Controller:   StudentController.courseDetail(courseId, session, model)
+            Returns:      student_course_lesson_details.html
+
+            The destination page shows:
+              - Full course info
+              - All lessons grouped by topic
+              - Watch button for each lesson
+          -->
+          <a th:href="@{/course/{id}(id=${course.courseId})}">
+            <button class="btn-view-course">
+              View Course <span class="arrow">→</span>
+            </button>
+          </a>
+        </div>
+
+      </div><!-- /course-card -->
+
+    </div><!-- /courses-wrap -->
+
+    <!-- BOTTOM NAV -->
+    <div class="bottom-nav">
+      <div class="bottom-links">
+        <a href="/student-home"><button class="btn-nav">🏠 Dashboard</button></a>
+        <a href="/all-courses"><button class="btn-nav primary">Browse More Courses →</button></a>
+      </div>
+      <span style="font-size:.82rem;color:var(--tx-4);">© 2026 CourseHub</span>
+    </div>
+
+  </div>
+</main>
+
+<footer>
+  <div class="footer-inner">
+    <span>© 2026 <a href="/">CourseHub</a> — Spring Boot &amp; Thymeleaf</span>
+    <span><a href="/student-home">Dashboard</a> &nbsp;·&nbsp; <a href="/all-courses">Browse</a></span>
+  </div>
+</footer>
+
+<script>
+  const mt = document.getElementById('menuToggle'), md = document.getElementById('menuDd');
+  mt.addEventListener('click', e => { e.stopPropagation(); md.classList.toggle('open'); });
+  document.addEventListener('click', () => md.classList.remove('open'));
+  md.addEventListener('click', e => e.stopPropagation());
+
+
+  // Auto-dismiss toast after 5 seconds
+const toast = document.getElementById('enrollToast');
+if (toast) {
+  setTimeout(() => dismissToast(), 10000);
+}
+function dismissToast() {
+  if (!toast) return;
+  toast.classList.add('hiding');
+  setTimeout(() => toast.remove(), 350);
+}
+
+
+</script>
+
+</body>
+</html>

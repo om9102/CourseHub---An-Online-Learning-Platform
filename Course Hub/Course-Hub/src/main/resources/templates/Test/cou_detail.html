@@ -1,0 +1,1175 @@
+<!DOCTYPE html>
+<!--
+╔══════════════════════════════════════════════════════════════════════════════╗
+║           student_course_details.html — COURSE DETAILS PAGE (REDESIGNED)    ║
+╠══════════════════════════════════════════════════════════════════════════════╣
+║  URL:        GET /course-details/{courseId}                                  ║
+║  Controller: StudentController.courseDetails()                               ║
+║  Template:   Course/student_course_details                                   ║
+║                                                                              ║
+║  MODEL ATTRIBUTES:                                                           ║
+║  ${course}           → Course object (id, courseId, courseName, etc.)        ║
+║  ${course.lessons}   → List<Lesson> — shown in curriculum section            ║
+║  ${recommended}      → List<Course> — max 4 other courses                    ║
+║  ${cartCount}        → int for navbar cart badge                             ║
+║  ${session.user}     → logged-in Users object                                ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+-->
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title th:text="${course.courseName} + ' — CourseHub'">Course Details — CourseHub</title>
+  <link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700;800&family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,500;0,9..144,700;0,9..144,900;1,9..144,400&display=swap" rel="stylesheet" />
+  <style>
+    /* ═══════════════════════════════════════════════════
+       TOKENS — deep navy/indigo theme, warm gold accent
+       Inspired by premium EdTech (Udemy/Coursera tier)
+    ═══════════════════════════════════════════════════ */
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      /* Core palette */
+      --ink:        #06080f;
+      --navy:       #0e1525;
+      --deep:       #1a2744;
+      --indigo:     #1d3461;
+      --blue:       #2952a3;
+      --blue-mid:   #3b6fd4;
+      --blue-lt:    #6090e8;
+      --sky:        #a8c4f0;
+
+      /* Gold accent */
+      --gold:       #e8a020;
+      --gold-lt:    #f5c842;
+      --gold-pale:  #fef8e7;
+
+      /* Surfaces */
+      --bg:         #f2f5fc;
+      --card:       #ffffff;
+      --s2:         #f7f9ff;
+      --s3:         #edf1fb;
+
+      /* Text */
+      --tx:         #0d1526;
+      --tx2:        #2d3a52;
+      --tx3:        #5c6b84;
+      --tx4:        #9ba8be;
+
+      /* Border */
+      --bd:         #dce3f0;
+      --bd2:        #ecf0fa;
+
+      /* Status */
+      --green:      #0d7c4a;
+      --green-bg:   #e6f9f1;
+      --red:        #d93025;
+      --orange:     #d97706;
+
+      /* Shadows */
+      --sh-xs:  0 1px 3px rgba(10,20,50,.06);
+      --sh-sm:  0 2px 10px rgba(15,30,80,.08);
+      --sh-md:  0 6px 24px rgba(15,30,80,.12);
+      --sh-lg:  0 16px 48px rgba(15,30,80,.16);
+      --sh-xl:  0 28px 72px rgba(15,30,80,.22);
+
+      /* Typography */
+      --ff-head: 'Fraunces', Georgia, serif;
+      --ff-body: 'Sora', system-ui, sans-serif;
+
+      /* Radii */
+      --r-xs:  4px;
+      --r-sm:  8px;
+      --r:     12px;
+      --r-lg:  18px;
+      --r-xl:  24px;
+
+      /* Motion */
+      --ease:  .22s cubic-bezier(.4, 0, .2, 1);
+      --spring: .35s cubic-bezier(.34, 1.56, .64, 1);
+    }
+
+    html { scroll-behavior: smooth; }
+    body { font-family: var(--ff-body); background: var(--bg); color: var(--tx); font-size: 15px; line-height: 1.65; }
+    a { text-decoration: none; color: inherit; }
+    ul { list-style: none; }
+    img { display: block; max-width: 100%; }
+
+    /* ═══════════════════════════════════════════════════
+       SCROLLBAR
+    ═══════════════════════════════════════════════════ */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--bd); border-radius: 6px; }
+
+    /* ═══════════════════════════════════════════════════
+       NAVBAR
+    ═══════════════════════════════════════════════════ */
+    .navbar {
+      background: var(--ink);
+      position: sticky; top: 0; z-index: 800;
+      box-shadow: 0 1px 0 rgba(255,255,255,.06), 0 4px 24px rgba(0,0,0,.3);
+    }
+    .nav-inner {
+      max-width: 1360px; margin: 0 auto; padding: 0 24px;
+      height: 62px; display: flex; align-items: center;
+      justify-content: space-between; gap: 16px;
+    }
+    .nav-logo {
+      font-family: var(--ff-head); font-size: 1.45rem; font-weight: 900;
+      color: #fff; letter-spacing: -.02em; flex-shrink: 0;
+      display: flex; align-items: center; gap: 10px;
+    }
+    .logo-mark {
+      width: 32px; height: 32px; background: var(--gold);
+      border-radius: 8px; display: flex; align-items: center;
+      justify-content: center; font-size: .9rem;
+    }
+
+    /* Breadcrumb in navbar center */
+    .nav-crumb {
+      flex: 1; display: flex; align-items: center; gap: 8px;
+      padding: 0 20px; overflow: hidden;
+    }
+    .nav-crumb a, .nav-crumb span {
+      font-size: .78rem; font-weight: 500; color: rgba(255,255,255,.45);
+      white-space: nowrap;
+    }
+    .nav-crumb a:hover { color: rgba(255,255,255,.8); }
+    .nav-crumb .sep { color: rgba(255,255,255,.2); }
+    .nav-crumb .current {
+      color: var(--gold-lt); font-weight: 600;
+      overflow: hidden; text-overflow: ellipsis;
+    }
+
+    .nav-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+    .nav-badge {
+      background: rgba(232,160,32,.15); color: var(--gold-lt);
+      font-size: .67rem; font-weight: 700; padding: 3px 10px;
+      border-radius: 20px; border: 1px solid rgba(232,160,32,.25);
+    }
+    .nav-name { font-size: .8rem; color: rgba(255,255,255,.6); font-weight: 500; }
+
+    .btn-nav {
+      padding: 7px 14px; font-family: var(--ff-body); font-size: .78rem; font-weight: 600;
+      color: rgba(255,255,255,.75); background: rgba(255,255,255,.07);
+      border: 1px solid rgba(255,255,255,.12); border-radius: var(--r-sm);
+      cursor: pointer; transition: all var(--ease); text-decoration: none;
+      display: inline-flex; align-items: center; gap: 5px; white-space: nowrap;
+    }
+    .btn-nav:hover { background: rgba(255,255,255,.14); color: #fff; }
+    .btn-logout {
+      padding: 7px 15px; font-family: var(--ff-body); font-size: .78rem; font-weight: 700;
+      color: var(--ink); background: var(--gold); border: none;
+      border-radius: var(--r-sm); cursor: pointer; transition: all var(--ease);
+    }
+    .btn-logout:hover { background: var(--gold-lt); transform: translateY(-1px); }
+
+    /* Cart badge */
+    .cart-wrap { position: relative; }
+    .cart-badge {
+      position: absolute; top: -5px; right: -5px;
+      background: var(--red); color: #fff; font-size: .6rem; font-weight: 800;
+      width: 16px; height: 16px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+    }
+
+    /* ═══════════════════════════════════════════════════
+       HERO BANNER — dark, immersive, editorial
+    ═══════════════════════════════════════════════════ */
+    .hero {
+      background: var(--ink);
+      background-image:
+        radial-gradient(ellipse 80% 60% at 65% 40%, rgba(45,82,163,.4) 0%, transparent 60%),
+        radial-gradient(ellipse 35% 50% at 15% 75%, rgba(232,160,32,.12) 0%, transparent 55%);
+      padding: 52px 0 0; /* no bottom pad — action card overlaps */
+      color: #fff;
+      position: relative; overflow: hidden;
+    }
+    /* Subtle dot texture */
+    .hero::before {
+      content: '';
+      position: absolute; inset: 0;
+      background-image: radial-gradient(rgba(255,255,255,.03) 1px, transparent 1px);
+      background-size: 24px 24px;
+      pointer-events: none;
+    }
+
+    .container { max-width: 1360px; margin: 0 auto; padding: 0 24px; position: relative; z-index: 1; }
+
+    /* Two-col hero layout */
+    .hero-grid {
+      display: grid; grid-template-columns: 1fr 340px;
+      gap: 40px; align-items: end; padding-bottom: 0;
+    }
+    .hero-left { padding-bottom: 52px; }
+
+    /* Type pill */
+    .type-pill {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-size: .68rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .09em; padding: 4px 12px;
+      border-radius: 20px; margin-bottom: 16px;
+    }
+    .pill-paid { background: rgba(255,255,255,.12); color: rgba(255,255,255,.85); border: 1px solid rgba(255,255,255,.2); }
+    .pill-free { background: rgba(13,124,74,.25); color: #4ade80; border: 1px solid rgba(74,222,128,.25); }
+    .pill-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+    /* Course title */
+    .hero-title {
+      font-family: var(--ff-head); font-size: 2.6rem; font-weight: 700;
+      line-height: 1.12; letter-spacing: -.03em; margin-bottom: 16px;
+      color: #fff;
+    }
+    .hero-desc {
+      font-size: .95rem; color: rgba(255,255,255,.65);
+      max-width: 540px; line-height: 1.8; margin-bottom: 24px;
+    }
+
+    /* Meta tags */
+    .hero-meta { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; }
+    .meta-chip {
+      display: flex; align-items: center; gap: 6px;
+      font-size: .79rem; color: rgba(255,255,255,.7); font-weight: 500;
+    }
+    .meta-chip .icon { font-size: .9rem; }
+    .meta-sep { color: rgba(255,255,255,.2); font-size: .7rem; }
+
+    /* Rating stars */
+    .stars { color: var(--gold); font-size: .85rem; letter-spacing: 1px; }
+
+    /* ═══════════════════════════════════════════════════
+       ACTION CARD — floats on right, overlaps hero/content
+    ═══════════════════════════════════════════════════ */
+    .action-card-wrap {
+      position: relative;
+      align-self: stretch;
+      display: flex; flex-direction: column; justify-content: flex-end;
+    }
+    .action-card {
+      background: var(--card);
+      border-radius: var(--r-xl);
+      box-shadow: var(--sh-xl);
+      overflow: hidden;
+      position: sticky; top: 74px; /* sticks just below navbar */
+      /* Slight upward transform to "float" above hero bottom */
+      transform: translateY(40px);
+      z-index: 10;
+    }
+    .ac-preview {
+      background: linear-gradient(135deg, var(--deep) 0%, var(--indigo) 100%);
+      height: 120px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 3.5rem; position: relative; overflow: hidden;
+    }
+    .ac-preview::after {
+      content: '';
+      position: absolute; inset: 0;
+      background: radial-gradient(circle at 70% 50%, rgba(255,255,255,.08) 0%, transparent 60%);
+    }
+    .ac-body { padding: 22px 24px 24px; }
+
+    .ac-price {
+      font-family: var(--ff-head); font-size: 2.4rem; font-weight: 900;
+      color: var(--indigo); line-height: 1;
+    }
+    .ac-price-free {
+      font-family: var(--ff-head); font-size: 2.4rem; font-weight: 900;
+      color: var(--green); line-height: 1;
+    }
+    .ac-price-note { font-size: .73rem; color: var(--tx3); margin: 4px 0 18px; }
+
+    /* CTA buttons */
+    .btn-enroll {
+      display: block; width: 100%; padding: 13px;
+      font-family: var(--ff-body); font-size: .95rem; font-weight: 700;
+      color: var(--card); background: var(--indigo);
+      border: none; border-radius: var(--r); cursor: pointer;
+      text-align: center; transition: all var(--ease);
+      margin-bottom: 10px; text-decoration: none;
+    }
+    .btn-enroll:hover { background: var(--blue-mid); transform: translateY(-2px); box-shadow: 0 6px 20px rgba(29,52,97,.3); }
+    .btn-enroll.free { background: var(--green); }
+    .btn-enroll.free:hover { background: #0a6640; }
+
+    .btn-cart {
+      display: block; width: 100%; padding: 13px;
+      font-family: var(--ff-body); font-size: .92rem; font-weight: 600;
+      color: var(--indigo); background: transparent;
+      border: 2px solid var(--indigo); border-radius: var(--r); cursor: pointer;
+      text-align: center; transition: all var(--ease);
+      margin-bottom: 20px; text-decoration: none;
+    }
+    .btn-cart:hover { background: var(--s3); }
+
+    /* What's included list */
+    .ac-includes { border-top: 1px solid var(--bd2); padding-top: 18px; }
+    .ac-includes-title { font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--tx3); margin-bottom: 12px; }
+    .inc-item {
+      display: flex; align-items: center; gap: 10px;
+      font-size: .8rem; color: var(--tx2); margin-bottom: 9px; font-weight: 500;
+    }
+    .inc-icon {
+      width: 26px; height: 26px; border-radius: 7px; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center; font-size: .78rem;
+    }
+    .ii-blue   { background: #e0e9ff; }
+    .ii-green  { background: var(--green-bg); }
+    .ii-gold   { background: var(--gold-pale); }
+    .ii-purple { background: #ede9ff; }
+    .ii-teal   { background: #e0f7fa; }
+
+    /* ═══════════════════════════════════════════════════
+       OFFSET DIVIDER — separates hero from body
+    ═══════════════════════════════════════════════════ */
+    .hero-divider { height: 50px; background: var(--bg); margin-top: 0; }
+
+    /* ═══════════════════════════════════════════════════
+       MAIN BODY
+    ═══════════════════════════════════════════════════ */
+    .main { padding: 12px 0 80px; }
+
+    /* Two-column layout matching hero grid columns */
+    .body-grid {
+      display: grid; grid-template-columns: 1fr 340px;
+      gap: 40px; align-items: start;
+    }
+    .body-left { min-width: 0; }
+
+    /* ── SECTION HEADERS ── */
+    .section-eyebrow {
+      font-size: .68rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .1em; color: var(--blue-mid); margin-bottom: 5px;
+    }
+    .section-title {
+      font-family: var(--ff-head); font-size: 1.4rem; font-weight: 700;
+      color: var(--tx); letter-spacing: -.02em; margin-bottom: 18px;
+    }
+
+    /* ── CARD BASE ── */
+    .card {
+      background: var(--card); border: 1px solid var(--bd2);
+      border-radius: var(--r-lg); box-shadow: var(--sh-xs);
+      overflow: hidden; margin-bottom: 20px;
+    }
+    .card-header {
+      padding: 16px 22px; border-bottom: 1px solid var(--bd2);
+      display: flex; align-items: center; justify-content: space-between;
+      background: var(--s2);
+    }
+    .card-header-title {
+      font-size: .88rem; font-weight: 700; color: var(--tx);
+      display: flex; align-items: center; gap: 8px;
+    }
+    .card-header-badge {
+      background: var(--indigo); color: #fff;
+      font-size: .65rem; font-weight: 700; padding: 2px 9px; border-radius: 20px;
+    }
+
+    /* ── CURRICULUM / LESSONS ── */
+    .lesson-row {
+      display: flex; align-items: flex-start; gap: 14px;
+      padding: 14px 22px; border-bottom: 1px solid var(--bd2);
+      transition: background var(--ease);
+      animation: slideIn .4s ease both;
+    }
+    .lesson-row:last-child { border-bottom: none; }
+    .lesson-row:hover { background: var(--s2); }
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateX(-8px); }
+      to   { opacity: 1; transform: translateX(0); }
+    }
+
+    .lesson-num {
+      width: 32px; height: 32px; border-radius: 8px; flex-shrink: 0;
+      background: var(--s3); color: var(--blue);
+      font-size: .76rem; font-weight: 700;
+      display: flex; align-items: center; justify-content: center;
+      margin-top: 2px; transition: all var(--ease);
+    }
+    .lesson-row:hover .lesson-num { background: var(--indigo); color: #fff; }
+
+    .lesson-body { flex: 1; min-width: 0; }
+    .lesson-name {
+      font-size: .87rem; font-weight: 700; color: var(--tx);
+      margin-bottom: 3px; line-height: 1.4;
+    }
+    .lesson-topic {
+      display: inline-flex; align-items: center; gap: 4px;
+      font-size: .68rem; font-weight: 600; color: var(--blue-mid);
+      background: var(--s3); padding: 2px 8px; border-radius: 10px;
+      margin-bottom: 4px;
+    }
+    .lesson-desc {
+      font-size: .76rem; color: var(--tx3); line-height: 1.55;
+    }
+    .lesson-lock {
+      display: inline-flex; align-items: center; gap: 4px;
+      font-size: .69rem; color: var(--tx4); font-style: italic; margin-top: 4px;
+    }
+
+    /* No lessons state */
+    .no-lessons {
+      padding: 40px 22px; text-align: center;
+      font-size: .86rem; color: var(--tx3);
+    }
+    .no-lessons-icon { font-size: 2.5rem; margin-bottom: 10px; }
+
+    /* Show-more toggle */
+    .show-more-row {
+      padding: 13px 22px; text-align: center;
+      border-top: 1px solid var(--bd2); background: var(--s2);
+    }
+    .btn-show-more {
+      font-family: var(--ff-body); font-size: .82rem; font-weight: 600;
+      color: var(--blue-mid); background: none; border: none; cursor: pointer;
+      display: inline-flex; align-items: center; gap: 6px;
+      transition: color var(--ease);
+    }
+    .btn-show-more:hover { color: var(--indigo); }
+
+    /* ── COURSE INFO STATS ── */
+    .stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; padding: 18px 22px; }
+    .stat-cell {
+      background: var(--s2); border: 1px solid var(--bd2); border-radius: var(--r);
+      padding: 14px 16px; display: flex; align-items: center; gap: 12px;
+    }
+    .stat-icon {
+      width: 36px; height: 36px; border-radius: 10px; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center; font-size: .95rem;
+    }
+    .si-indigo  { background: #e0e9ff; }
+    .si-green   { background: var(--green-bg); }
+    .si-gold    { background: var(--gold-pale); }
+    .si-blue    { background: #dbeafe; }
+    .si-purple  { background: #ede9ff; }
+    .si-teal    { background: #e0f7fa; }
+    .stat-val { font-family: var(--ff-head); font-size: 1.2rem; font-weight: 700; color: var(--tx); line-height: 1; }
+    .stat-lbl { font-size: .68rem; color: var(--tx3); margin-top: 2px; font-weight: 500; }
+
+    /* ── TRAINER CARD ── */
+    .trainer-card-body { padding: 20px 22px; display: flex; align-items: flex-start; gap: 16px; }
+    .trainer-avatar {
+      width: 58px; height: 58px; border-radius: 50%; flex-shrink: 0;
+      background: linear-gradient(135deg, var(--indigo), var(--blue-mid));
+      display: flex; align-items: center; justify-content: center;
+      font-family: var(--ff-head); font-size: 1.5rem; font-weight: 900; color: #fff;
+      box-shadow: 0 4px 16px rgba(29,52,97,.3);
+    }
+    .trainer-info { flex: 1; }
+    .trainer-name { font-size: .95rem; font-weight: 700; color: var(--tx); margin-bottom: 3px; }
+    .trainer-title { font-size: .78rem; color: var(--tx3); margin-bottom: 10px; }
+    .trainer-stats { display: flex; gap: 16px; }
+    .t-stat { font-size: .75rem; color: var(--tx3); display: flex; align-items: center; gap: 4px; font-weight: 500; }
+    .t-stat strong { color: var(--tx); font-weight: 700; }
+
+    /* ═══════════════════════════════════════════════════
+       RIGHT SIDEBAR (sticky)
+    ═══════════════════════════════════════════════════ */
+    .sidebar { position: sticky; top: 74px; }
+
+    /* Learn outcomes */
+    .learn-card { padding: 20px; }
+    .learn-item {
+      display: flex; align-items: flex-start; gap: 10px;
+      font-size: .82rem; color: var(--tx2); margin-bottom: 10px;
+      line-height: 1.5; font-weight: 500;
+    }
+    .learn-check {
+      width: 20px; height: 20px; border-radius: 50%; flex-shrink: 0;
+      background: var(--green-bg); color: var(--green);
+      display: flex; align-items: center; justify-content: center;
+      font-size: .65rem; font-weight: 800; margin-top: 1px;
+    }
+
+    /* Requirements */
+    .req-item {
+      display: flex; align-items: flex-start; gap: 9px;
+      font-size: .81rem; color: var(--tx2); margin-bottom: 8px; line-height: 1.5;
+    }
+    .req-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--blue-mid); flex-shrink: 0; margin-top: 7px; }
+
+    /* Share / actions row */
+    .share-row { padding: 16px 20px; display: flex; gap: 8px; }
+    .btn-share {
+      flex: 1; padding: 9px; font-family: var(--ff-body); font-size: .78rem; font-weight: 600;
+      color: var(--tx2); background: var(--s2); border: 1px solid var(--bd);
+      border-radius: var(--r-sm); cursor: pointer; transition: all var(--ease);
+      display: flex; align-items: center; justify-content: center; gap: 5px;
+    }
+    .btn-share:hover { background: var(--s3); color: var(--indigo); border-color: var(--blue-lt); }
+
+    /* ═══════════════════════════════════════════════════
+       RECOMMENDED COURSES SECTION
+    ═══════════════════════════════════════════════════ */
+    .rec-section { margin-top: 40px; }
+
+    .rec-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
+
+    .rec-card {
+      background: var(--card); border: 1px solid var(--bd2);
+      border-radius: var(--r-lg); overflow: hidden;
+      box-shadow: var(--sh-xs); transition: transform var(--ease), box-shadow var(--ease), border-color var(--ease);
+      display: flex; flex-direction: column;
+    }
+    .rec-card:hover { transform: translateY(-4px); box-shadow: var(--sh-md); border-color: rgba(59,111,212,.2); }
+
+    .rec-band {
+      height: 72px; display: flex; align-items: center; justify-content: space-between;
+      padding: 0 16px; position: relative; overflow: hidden;
+    }
+    .rec-band::after { content: ''; position: absolute; right: -12px; top: -12px; width: 80px; height: 80px; border-radius: 50%; background: rgba(255,255,255,.1); }
+    .rb1 { background: linear-gradient(135deg, #1a2744, #2952a3); }
+    .rb2 { background: linear-gradient(135deg, #0d4a2e, #0d7c4a); }
+    .rb3 { background: linear-gradient(135deg, #3b1f6a, #7c3aed); }
+    .rb4 { background: linear-gradient(135deg, #7c2e00, #d97706); }
+    .rb5 { background: linear-gradient(135deg, #7c0d24, #e11d48); }
+    .rb6 { background: linear-gradient(135deg, #003f5c, #0ea5e9); }
+    .rec-emoji { font-size: 1.8rem; z-index: 1; filter: drop-shadow(0 2px 4px rgba(0,0,0,.2)); }
+    .rec-type-pill {
+      font-size: .6rem; font-weight: 800; text-transform: uppercase;
+      padding: 3px 9px; border-radius: 20px; z-index: 1;
+    }
+    .rtp-paid { background: rgba(255,255,255,.9); color: var(--indigo); }
+    .rtp-free { background: rgba(13,124,74,.85); color: #fff; }
+
+    .rec-body { padding: 14px 16px; flex: 1; display: flex; flex-direction: column; gap: 4px; }
+    .rec-name { font-size: .87rem; font-weight: 700; color: var(--tx); line-height: 1.4; margin-bottom: 3px; }
+    .rec-trainer { font-size: .74rem; color: var(--tx3); font-weight: 500; }
+    .rec-meta { font-size: .7rem; color: var(--tx4); margin-top: 4px; }
+
+    .rec-footer {
+      padding: 12px 16px; border-top: 1px solid var(--bd2);
+      display: flex; align-items: center; justify-content: space-between;
+      background: var(--s2);
+    }
+    .rec-price { font-family: var(--ff-head); font-size: 1.05rem; font-weight: 900; color: var(--indigo); }
+    .rec-price-free { font-family: var(--ff-head); font-size: 1.05rem; font-weight: 900; color: var(--green); }
+
+    .rec-actions { display: flex; gap: 6px; }
+    .btn-rec {
+      padding: 6px 12px; font-family: var(--ff-body); font-size: .73rem; font-weight: 600;
+      border-radius: var(--r-sm); cursor: pointer; transition: all var(--ease);
+      white-space: nowrap;
+    }
+    .btn-rec-cart { background: var(--indigo); color: #fff; border: none; }
+    .btn-rec-cart:hover { background: var(--blue-mid); }
+    .btn-rec-detail { background: transparent; color: var(--indigo); border: 1.5px solid var(--indigo); }
+    .btn-rec-detail:hover { background: var(--s3); }
+
+    /* Empty recommended */
+    .rec-empty { text-align: center; padding: 40px; color: var(--tx3); font-size: .86rem; }
+
+    /* ═══════════════════════════════════════════════════
+       FOOTER
+    ═══════════════════════════════════════════════════ */
+    footer {
+      background: var(--navy); color: rgba(255,255,255,.4);
+      padding: 28px 0; text-align: center; font-size: .78rem;
+    }
+    footer a { color: var(--sky); }
+    .footer-links { display: flex; align-items: center; justify-content: center; gap: 20px; flex-wrap: wrap; }
+    .footer-links span { color: rgba(255,255,255,.15); }
+
+    /* ═══════════════════════════════════════════════════
+       TOAST notification
+    ═══════════════════════════════════════════════════ */
+    .toast {
+      position: fixed; bottom: 24px; right: 24px; z-index: 9999;
+      background: var(--ink); color: #fff; border-radius: var(--r);
+      padding: 12px 18px; font-size: .82rem; font-weight: 600;
+      box-shadow: var(--sh-lg); display: flex; align-items: center; gap: 9px;
+      transform: translateY(80px); opacity: 0;
+      transition: transform .3s var(--spring), opacity .3s ease;
+      pointer-events: none;
+    }
+    .toast.show { transform: translateY(0); opacity: 1; }
+    .toast-icon { font-size: 1rem; }
+
+    /* ═══════════════════════════════════════════════════
+       RESPONSIVE
+    ═══════════════════════════════════════════════════ */
+    @media (max-width: 1100px) {
+      .hero-grid, .body-grid { grid-template-columns: 1fr 300px; gap: 28px; }
+    }
+    @media (max-width: 900px) {
+      .hero-grid, .body-grid { grid-template-columns: 1fr; }
+      .action-card { transform: none; position: static; order: -1; }
+      .hero-left { padding-bottom: 28px; }
+      .sidebar { position: static; }
+      .stats-grid { grid-template-columns: repeat(2, 1fr); }
+      .nav-crumb { display: none; }
+    }
+    @media (max-width: 640px) {
+      .hero { padding: 32px 0 0; }
+      .hero-title { font-size: 2rem; }
+      .container { padding: 0 16px; }
+      .stats-grid { grid-template-columns: 1fr; }
+      .nav-inner { padding: 0 14px; }
+      .nav-name, .nav-badge { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════
+     NAVBAR
+═══════════════════════════════════════════════════════ -->
+<nav class="navbar">
+  <div class="nav-inner">
+    <a href="/student-home" class="nav-logo">
+      <div class="logo-mark">📚</div>
+      CourseHub
+    </a>
+
+    <!-- Breadcrumb in navbar center -->
+    <div class="nav-crumb">
+      <a href="/student-home">Dashboard</a>
+      <span class="sep">›</span>
+      <a href="/all-courses">Browse</a>
+      <span class="sep">›</span>
+      <span class="current" th:text="${course.courseName}">Course Name</span>
+    </div>
+
+    <div class="nav-right">
+      <span class="nav-badge">🎓 Student</span>
+      <span class="nav-name" th:text="${session.user.firstname}">Student</span>
+      <a href="/all-courses" class="btn-nav">← Courses</a>
+
+      <!-- Cart with badge -->
+      <div class="cart-wrap">
+        <a href="/cart" class="btn-nav">🛒 Cart</a>
+        <span class="cart-badge"
+              th:if="${cartCount != null and cartCount > 0}"
+              th:text="${cartCount}">0</span>
+      </div>
+
+      <a href="/logout"><button class="btn-logout">Logout</button></a>
+    </div>
+  </div>
+</nav>
+
+<!-- ═══════════════════════════════════════════════════════
+     HERO BANNER
+═══════════════════════════════════════════════════════ -->
+<section class="hero">
+  <div class="container">
+    <div class="hero-grid">
+
+      <!-- LEFT: Course information -->
+      <div class="hero-left">
+
+        <!-- Type pill -->
+        <div class="type-pill pill-paid"
+             th:if="${course.courseType != 'free'}">
+          <span class="pill-dot"></span> Paid Course
+        </div>
+        <div class="type-pill pill-free"
+             th:if="${course.courseType == 'free'}">
+          <span class="pill-dot"></span> Free Course
+        </div>
+
+        <!-- Course title -->
+        <h1 class="hero-title" th:text="${course.courseName}">
+          Course Name Goes Here
+        </h1>
+
+        <!-- Description -->
+        <p class="hero-desc" th:text="${course.courseShortDescription}">
+          A comprehensive course description that tells students exactly what they will learn.
+        </p>
+
+        <!-- Meta row -->
+        <div class="hero-meta">
+          <div class="meta-chip">
+            <span class="icon">👨‍💻</span>
+            <strong th:text="${course.trainerName}">Trainer Name</strong>
+          </div>
+          <span class="meta-sep">•</span>
+          <div class="meta-chip">
+            <span class="icon">📖</span>
+            <span th:text="${#lists.size(course.lessons)} + ' Lessons'">0 Lessons</span>
+          </div>
+          <span class="meta-sep">•</span>
+          <div class="meta-chip">
+            <span class="stars">★★★★★</span>
+            <span>4.8</span>
+          </div>
+          <span class="meta-sep">•</span>
+          <div class="meta-chip">
+            <span class="icon">🆔</span>
+            <span th:text="${course.courseId}">ID</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- RIGHT: Action card -->
+      <div class="action-card-wrap">
+        <div class="action-card">
+          <!-- Course preview band -->
+          <div class="ac-preview">📘</div>
+
+          <div class="ac-body">
+            <!-- Price -->
+            <div class="ac-price"
+                 th:if="${course.courseType != 'free'}"
+                 th:text="'₹' + ${course.coursePrice}">₹999</div>
+            <div class="ac-price-free"
+                 th:if="${course.courseType == 'free'}">Free</div>
+            <div class="ac-price-note"
+                 th:if="${course.courseType != 'free'}">One-time payment · Lifetime access</div>
+            <div class="ac-price-note"
+                 th:if="${course.courseType == 'free'}">No cost, ever · Lifetime access</div>
+
+            <!-- Enroll Now button -->
+            <a th:href="@{/cart/add(courseId=${course.courseId})}"
+               class="btn-enroll"
+               th:classappend="${course.courseType == 'free'} ? ' free' : ''">
+              ⚡ Enroll Now
+            </a>
+
+            <!-- Add to Cart button -->
+            <a th:href="@{/cart/add(courseId=${course.courseId})}"
+               class="btn-cart">
+              🛒 Add to Cart
+            </a>
+
+            <!-- What's included -->
+            <div class="ac-includes">
+              <div class="ac-includes-title">This course includes</div>
+              <div class="inc-item">
+                <div class="inc-icon ii-blue">📹</div>
+                <span th:text="${#lists.size(course.lessons)} + ' video lessons'">0 video lessons</span>
+              </div>
+              <div class="inc-item">
+                <div class="inc-icon ii-green">📄</div>
+                <span>Downloadable study notes</span>
+              </div>
+              <div class="inc-item">
+                <div class="inc-icon ii-gold">🏆</div>
+                <span>Certificate of completion</span>
+              </div>
+              <div class="inc-item">
+                <div class="inc-icon ii-purple">♾️</div>
+                <span>Lifetime access</span>
+              </div>
+              <div class="inc-item">
+                <div class="inc-icon ii-teal">📱</div>
+                <span>Access on any device</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /hero-grid -->
+  </div>
+</section>
+
+<!-- Visual separation -->
+<div class="hero-divider"></div>
+
+<!-- ═══════════════════════════════════════════════════════
+     MAIN BODY
+═══════════════════════════════════════════════════════ -->
+<main class="main">
+  <div class="container">
+    <div class="body-grid">
+
+      <!-- ══════════════════
+           LEFT COLUMN
+      ══════════════════ -->
+      <div class="body-left">
+
+        <!-- COURSE STATS -->
+        <div class="card" style="margin-bottom:20px;">
+          <div class="card-header">
+            <span class="card-header-title">📊 Course Overview</span>
+          </div>
+          <div class="stats-grid">
+            <div class="stat-cell">
+              <div class="stat-icon si-indigo">📖</div>
+              <div>
+                <div class="stat-val" th:text="${#lists.size(course.lessons)}">0</div>
+                <div class="stat-lbl">Total Lessons</div>
+              </div>
+            </div>
+            <div class="stat-cell">
+              <div class="stat-icon si-green">⏱</div>
+              <div>
+                <div class="stat-val">Self-paced</div>
+                <div class="stat-lbl">Learning Mode</div>
+              </div>
+            </div>
+            <div class="stat-cell">
+              <div class="stat-icon si-gold">🏆</div>
+              <div>
+                <div class="stat-val">Certificate</div>
+                <div class="stat-lbl">On Completion</div>
+              </div>
+            </div>
+            <div class="stat-cell">
+              <div class="stat-icon si-blue">📱</div>
+              <div>
+                <div class="stat-val">Any Device</div>
+                <div class="stat-lbl">Access Mode</div>
+              </div>
+            </div>
+            <div class="stat-cell">
+              <div class="stat-icon si-purple">♾️</div>
+              <div>
+                <div class="stat-val">Lifetime</div>
+                <div class="stat-lbl">Access Duration</div>
+              </div>
+            </div>
+            <div class="stat-cell">
+              <div class="stat-icon si-teal">📄</div>
+              <div>
+                <div class="stat-val">Included</div>
+                <div class="stat-lbl">Study Notes</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- CURRICULUM -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-header-title">
+              📖 Course Curriculum
+            </span>
+            <span class="card-header-badge"
+                  th:text="${#lists.size(course.lessons)} + ' Lessons'">0 Lessons</span>
+          </div>
+
+          <!--
+            EMPTY STATE
+            th:if="${#lists.isEmpty(course.lessons)}"
+          -->
+          <div class="no-lessons" th:if="${#lists.isEmpty(course.lessons)}">
+            <div class="no-lessons-icon">📭</div>
+            <p>No lessons added yet. Check back soon!</p>
+          </div>
+
+          <!--
+            LESSON LOOP
+            th:each="lesson, lStat : ${course.lessons}"
+            Shows all lessons with animation stagger.
+            Locked badge shown because user is not yet enrolled.
+          -->
+          <div th:unless="${#lists.isEmpty(course.lessons)}" id="lessonList">
+            <div class="lesson-row"
+                 th:each="lesson, lStat : ${course.lessons}"
+                 th:style="'animation-delay:' + ${lStat.index * 45} + 'ms'"
+                 th:class="${lStat.index >= 5} ? 'lesson-row extra hidden-lesson' : 'lesson-row'">
+
+              <!-- Number badge -->
+              <div class="lesson-num" th:text="${lesson.lessonId}">1</div>
+
+              <!-- Lesson info -->
+              <div class="lesson-body">
+                <div class="lesson-name" th:text="${lesson.lessonName}">Lesson Name</div>
+                <div class="lesson-topic">
+                  📌 <span th:text="${lesson.lessonTopic}">Topic</span>
+                </div>
+                <div class="lesson-desc" th:text="${lesson.lessonDescription}">
+                  Lesson description here.
+                </div>
+                <div class="lesson-lock">🔒 Enroll to unlock this lesson</div>
+              </div>
+
+            </div>
+          </div>
+
+          <!-- Show more / less toggle (JS powered) -->
+          <div class="show-more-row"
+               th:if="${#lists.size(course.lessons) > 5}">
+            <button class="btn-show-more" id="showMoreBtn" onclick="toggleLessons()">
+              <span id="showMoreText">▼ Show All <span th:text="${#lists.size(course.lessons) - 5}">0</span> More Lessons</span>
+            </button>
+          </div>
+
+        </div><!-- /curriculum card -->
+
+        <!-- TRAINER CARD -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-header-title">🧑‍🏫 Your Instructor</span>
+          </div>
+          <div class="trainer-card-body">
+            <!-- Avatar: first letter of trainer name -->
+            <div class="trainer-avatar"
+                 th:text="${#strings.substring(course.trainerName, 0, 1).toUpperCase()}">A</div>
+            <div class="trainer-info">
+              <div class="trainer-name" th:text="${course.trainerName}">Trainer Name</div>
+              <div class="trainer-title">Expert Instructor · CourseHub</div>
+              <div class="trainer-stats">
+                <div class="t-stat">📚 <strong th:text="${#lists.size(course.lessons)}">0</strong> Lessons</div>
+                <div class="t-stat">⭐ <strong>4.8</strong> Rating</div>
+                <div class="t-stat">🎓 <strong>500+</strong> Students</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- BACK NAV -->
+        <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:8px;">
+          <a href="/all-courses"
+             style="font-size:.82rem;font-weight:600;color:var(--blue-mid);display:flex;align-items:center;gap:5px;">
+            ← Back to All Courses
+          </a>
+          <span style="color:var(--bd);">|</span>
+          <a href="/student-home"
+             style="font-size:.82rem;font-weight:600;color:var(--blue-mid);">
+            🏠 Dashboard
+          </a>
+          <span style="color:var(--bd);">|</span>
+          <a href="/cart"
+             style="font-size:.82rem;font-weight:600;color:var(--blue-mid);">
+            🛒 Cart
+          </a>
+        </div>
+
+      </div><!-- /body-left -->
+
+      <!-- ══════════════════
+           RIGHT SIDEBAR
+      ══════════════════ -->
+      <div class="sidebar">
+
+        <!-- What you'll learn -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-header-title">🎯 What You'll Learn</span>
+          </div>
+          <div class="learn-card">
+            <div class="learn-item">
+              <div class="learn-check">✓</div>
+              <span th:text="${course.courseShortDescription}">You'll gain hands-on skills and in-depth knowledge from this course.</span>
+            </div>
+            <div class="learn-item">
+              <div class="learn-check">✓</div>
+              <span>Build real projects from scratch with guided lessons</span>
+            </div>
+            <div class="learn-item">
+              <div class="learn-check">✓</div>
+              <span>Earn a verified certificate on completion</span>
+            </div>
+            <div class="learn-item">
+              <div class="learn-check">✓</div>
+              <span>Access downloadable notes and resources</span>
+            </div>
+            <div class="learn-item">
+              <div class="learn-check">✓</div>
+              <span>Watch lessons at your own pace, any device</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Requirements -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-header-title">📋 Requirements</span>
+          </div>
+          <div style="padding:16px 20px;">
+            <div class="req-item"><div class="req-dot"></div><span>Basic understanding of the subject area</span></div>
+            <div class="req-item"><div class="req-dot"></div><span>A computer with internet access</span></div>
+            <div class="req-item"><div class="req-dot"></div><span>Willingness to learn and practice</span></div>
+            <div class="req-item"><div class="req-dot"></div><span>No prior advanced experience needed</span></div>
+          </div>
+        </div>
+
+        <!-- Share / Wishlist -->
+        <div class="card">
+          <div class="share-row">
+            <button class="btn-share" onclick="shareCourse()">🔗 Share</button>
+            <button class="btn-share" onclick="wishlist()">🤍 Wishlist</button>
+          </div>
+        </div>
+
+      </div><!-- /sidebar -->
+
+    </div><!-- /body-grid -->
+
+    <!-- ═══════════════════════════════════════════════════
+         RECOMMENDED COURSES
+    ═══════════════════════════════════════════════════ -->
+    <div class="rec-section">
+      <div class="section-eyebrow">✨ You Might Also Like</div>
+      <h2 class="section-title">Recommended Courses</h2>
+
+      <!-- Empty recommended state -->
+      <div class="rec-empty" th:if="${#lists.isEmpty(recommended)}">
+        <p>No other courses available yet. Check back soon!</p>
+      </div>
+
+      <!--
+        RECOMMENDED LOOP
+        th:each="c, iter : ${recommended}"
+        iter.index % 6 for colour cycling
+      -->
+      <div class="rec-grid" th:unless="${#lists.isEmpty(recommended)}">
+
+        <div class="rec-card"
+             th:each="c, iter : ${recommended}"
+             th:style="'animation-delay:' + ${iter.index * 60} + 'ms'">
+
+          <!-- Colour band -->
+          <div class="rec-band"
+               th:classappend="${iter.index % 6 == 0} ? 'rb1' :
+                        (${iter.index % 6 == 1} ? 'rb2' :
+                        (${iter.index % 6 == 2} ? 'rb3' :
+                        (${iter.index % 6 == 3} ? 'rb4' :
+                        (${iter.index % 6 == 4} ? 'rb5' : 'rb6'))))">
+            <div class="rec-emoji">📘</div>
+            <span class="rec-type-pill rtp-free"
+                  th:if="${c.courseType == 'free'}">Free</span>
+            <span class="rec-type-pill rtp-paid"
+                  th:unless="${c.courseType == 'free'}">Paid</span>
+          </div>
+
+          <!-- Body -->
+          <div class="rec-body">
+            <div class="rec-name" th:text="${c.courseName}">Course Name</div>
+            <div class="rec-trainer" th:text="'By ' + ${c.trainerName}">By Trainer</div>
+            <div class="rec-meta" th:text="${#lists.size(c.lessons)} + ' Lessons'">0 Lessons</div>
+          </div>
+
+          <!-- Footer -->
+          <div class="rec-footer">
+            <div>
+              <div class="rec-price"
+                   th:if="${c.courseType != 'free'}"
+                   th:text="'₹' + ${c.coursePrice}">₹999</div>
+              <div class="rec-price-free"
+                   th:if="${c.courseType == 'free'}">Free</div>
+            </div>
+            <div class="rec-actions">
+              <a th:href="@{/cart/add(courseId=${c.courseId})}">
+                <button class="btn-rec btn-rec-cart">+ Cart</button>
+              </a>
+              <a th:href="@{/course-details/{id}(id=${c.courseId})}">
+                <button class="btn-rec btn-rec-detail">Details</button>
+              </a>
+            </div>
+          </div>
+
+        </div><!-- /rec-card -->
+
+      </div><!-- /rec-grid -->
+    </div><!-- /rec-section -->
+
+  </div><!-- /container -->
+</main>
+
+<!-- ═══════════════════════════════════════════════════════
+     FOOTER
+═══════════════════════════════════════════════════════ -->
+<footer>
+  <div class="footer-links">
+    <a href="/student-home">Dashboard</a>
+    <span>·</span>
+    <a href="/all-courses">All Courses</a>
+    <span>·</span>
+    <a href="/cart">Cart</a>
+    <span>·</span>
+    <a href="/my-courses">My Courses</a>
+    <span>·</span>
+    <span>© 2026 CourseHub</span>
+  </div>
+</footer>
+
+<!-- Toast notification -->
+<div class="toast" id="toast">
+  <span class="toast-icon" id="toastIcon">✅</span>
+  <span id="toastMsg">Done!</span>
+</div>
+
+<script>
+  /* ══════════════════════════════════════════
+     LESSON SHOW MORE / LESS TOGGLE
+  ══════════════════════════════════════════ */
+  (function () {
+    // Hide lessons after index 5 on load
+    var hidden = document.querySelectorAll('.hidden-lesson');
+    hidden.forEach(function (el) { el.style.display = 'none'; });
+  })();
+
+  var lessonsExpanded = false;
+
+  function toggleLessons() {
+    var hidden = document.querySelectorAll('.hidden-lesson');
+    var btn    = document.getElementById('showMoreBtn');
+    var text   = document.getElementById('showMoreText');
+
+    lessonsExpanded = !lessonsExpanded;
+
+    hidden.forEach(function (el) {
+      el.style.display = lessonsExpanded ? 'flex' : 'none';
+    });
+
+    if (lessonsExpanded) {
+      text.innerHTML = '▲ Show Less';
+    } else {
+      // Rebuild original label by counting hidden items
+      text.innerHTML = '▼ Show All ' + hidden.length + ' More Lessons';
+    }
+  }
+
+  /* ══════════════════════════════════════════
+     TOAST
+  ══════════════════════════════════════════ */
+  function showToast(icon, msg) {
+    var t = document.getElementById('toast');
+    document.getElementById('toastIcon').textContent = icon;
+    document.getElementById('toastMsg').textContent  = msg;
+    t.classList.add('show');
+    setTimeout(function () { t.classList.remove('show'); }, 2800);
+  }
+
+  /* ══════════════════════════════════════════
+     SHARE
+  ══════════════════════════════════════════ */
+  function shareCourse() {
+    if (navigator.share) {
+      navigator.share({
+        title: document.title,
+        url: window.location.href
+      }).catch(function () {});
+    } else {
+      navigator.clipboard.writeText(window.location.href).then(function () {
+        showToast('🔗', 'Link copied to clipboard!');
+      }).catch(function () {
+        showToast('🔗', 'Copy the URL from your browser');
+      });
+    }
+  }
+
+  /* ══════════════════════════════════════════
+     WISHLIST (UI-only demo)
+  ══════════════════════════════════════════ */
+  function wishlist() {
+    showToast('🤍', 'Added to wishlist!');
+  }
+
+  /* ══════════════════════════════════════════
+     ANIMATE LESSON ROWS IN ON SCROLL
+  ══════════════════════════════════════════ */
+  if ('IntersectionObserver' in window) {
+    var observer = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (entry.isIntersecting) {
+          entry.target.style.opacity = '1';
+          entry.target.style.transform = 'translateX(0)';
+        }
+      });
+    }, { threshold: 0.1 });
+
+    document.querySelectorAll('.lesson-row').forEach(function (el) {
+      observer.observe(el);
+    });
+  }
+</script>
+
+</body>
+</html>

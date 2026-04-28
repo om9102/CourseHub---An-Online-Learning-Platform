@@ -1,0 +1,1362 @@
+<!DOCTYPE html>
+<!--
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                   student_Home.html — STUDENT DASHBOARD                      ║
+╠══════════════════════════════════════════════════════════════════════════════╣
+║  BACKEND NEEDED IN NavController.java:                                       ║
+║                                                                              ║
+║  @GetMapping("/student-home")                                                ║
+║  public String studentHome(HttpSession session, Model model) {               ║
+║                                                                              ║
+║      // 1. Cart count for navbar badge                                       ║
+║      Object cart = session.getAttribute("cart");                             ║
+║      int cartCount = (cart instanceof List) ? ((List)cart).size() : 0;      ║
+║      model.addAttribute("cartCount", cartCount);                             ║
+║                                                                              ║
+║      // 2. Get enrolled courses (after checkout, store in session)           ║
+║      //    OR fetch from EnrolledCourse table (future feature)               ║
+║      //    For now: use session-based enrolled list                          ║
+║      Object enrolled = session.getAttribute("enrolledCourses");             ║
+║      List<Course> enrolledCourses = (enrolled instanceof List) ?            ║
+║                                     (List<Course>) enrolled :               ║
+║                                     new ArrayList<>();                       ║
+║      model.addAttribute("enrolledCourses", enrolledCourses);                ║
+║                                                                              ║
+║      // 3. All courses for "Recommended" section                             ║
+║      List<Course> allCourses = tService.getAllCourses();                     ║
+║      // Show first 6 as recommendations                                      ║
+║      List<Course> recommended = allCourses.size() > 6 ?                     ║
+║                                  allCourses.subList(0, 6) : allCourses;     ║
+║      model.addAttribute("courses", recommended);                            ║
+║                                                                              ║
+║      return "Home/student_Home";                                             ║
+║  }                                                                           ║
+║                                                                              ║
+║  NOTE: Cart Preview section is REMOVED from this page.                      ║
+║        Cart is accessible via navbar cart button → /cart                    ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+-->
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard — Course Hub</title>
+  <!-- Same font pairing as index.html: Playfair Display + DM Sans -->
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&family=Playfair+Display:wght@700;800;900&display=swap" rel="stylesheet">
+  <style>
+    /* ═══════════════════════════════════════════════════
+       DESIGN TOKENS — matches index.html + public_courses.html exactly
+    ═══════════════════════════════════════════════════ */
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+      --midnight:  #0c0e1a;
+      --navy:      #0f172a;
+      --blue-deep: #1e3a8a;
+      --blue:      #2563eb;
+      --blue-lt:   #3b82f6;
+      --blue-soft: #eff6ff;
+      --gold:      #f59e0b;
+      --gold-pale: #fef3c7;
+
+      --bg:        #f4f7ff;
+      --card:      #ffffff;
+      --surface-2: #f8faff;
+      --surface-3: #eef2ff;
+
+      --tx:   #0f172a;
+      --tx-2: #374151;
+      --tx-3: #6b7280;
+      --tx-4: #9ca3af;
+
+      --bd:   #e5e7eb;
+      --bd-2: #f0f2f9;
+
+      --green:    #059669;
+      --green-bg: #ecfdf5;
+      --red:      #dc2626;
+      --amber:    #d97706;
+
+      --sh-sm: 0 1px 4px rgba(15,23,42,.05), 0 1px 2px rgba(15,23,42,.04);
+      --sh-md: 0 4px 16px rgba(30,58,138,.08);
+      --sh-lg: 0 12px 36px rgba(30,58,138,.13);
+      --sh-xl: 0 24px 64px rgba(30,58,138,.18);
+
+      --ff-head: 'Playfair Display', Georgia, serif;
+      --ff-body: 'DM Sans', system-ui, sans-serif;
+
+      --r-sm: 8px; --r: 12px; --r-lg: 18px; --r-xl: 24px;
+      --ease: .2s cubic-bezier(.4,0,.2,1);
+    }
+
+    body { font-family: var(--ff-body); background: var(--bg); color: var(--tx); font-size: 15px; line-height: 1.6; }
+    a { text-decoration: none; color: inherit; }
+    ul { list-style: none; }
+
+    /* ═══════════════════════════════════════════════════
+       NAVBAR — matches index.html / public_courses.html
+    ═══════════════════════════════════════════════════ */
+    .navbar {
+      background: var(--midnight);
+      position: sticky; top: 0; z-index: 500;
+      box-shadow: 0 1px 0 rgba(255,255,255,.05), 0 4px 20px rgba(0,0,0,.3);
+    }
+    .nav-inner {
+      max-width: 1240px; margin: 0 auto; padding: 0 28px;
+      height: 66px; display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    }
+    .nav-logo {
+      display: flex; align-items: center; gap: 9px;
+      font-family: var(--ff-head); font-size: 1.45rem;
+      font-weight: 900; color: #fff; letter-spacing: -.03em; flex-shrink: 0;
+    }
+    .logo-mark {
+      width: 32px; height: 32px; background: var(--gold);
+      border-radius: 8px; display: flex; align-items: center;
+      justify-content: center; font-size: .9rem; flex-shrink: 0;
+    }
+
+    /* Desktop nav links */
+    .nav-links { display: flex; align-items: center; gap: 2px; }
+    .nav-links a {
+      font-size: .87rem; font-weight: 500;
+      color: rgba(255,255,255,.6); padding: 7px 13px;
+      border-radius: var(--r-sm); transition: all var(--ease);
+    }
+    .nav-links a:hover, .nav-links a.active { color: #fff; background: rgba(255,255,255,.08); }
+    .nav-links a.active { color: var(--gold); }
+
+    /* Right nav group */
+    .nav-right { display: flex; align-items: center; gap: 10px; position: relative; }
+
+    /* Student badge */
+    .nav-badge {
+      background: rgba(255,255,255,.1); color: #93c5fd;
+      font-size: .73rem; font-weight: 600; padding: 4px 11px; border-radius: 20px; white-space: nowrap;
+    }
+    .nav-name { font-size: .83rem; color: rgba(255,255,255,.72); font-weight: 500; }
+
+    /* Cart button with item count */
+    .cart-wrap { position: relative; }
+    .btn-cart {
+      display: flex; align-items: center; gap: 6px;
+      padding: 8px 16px; font-family: var(--ff-body); font-size: .84rem; font-weight: 600;
+      color: #fff; background: rgba(255,255,255,.1);
+      border: 1px solid rgba(255,255,255,.2); border-radius: var(--r-sm);
+      cursor: pointer; transition: all var(--ease);
+    }
+    .btn-cart:hover { background: rgba(255,255,255,.18); }
+    /* Red badge — shown only when cart has items
+       THYMELEAF: th:if="${cartCount != null and cartCount > 0}"
+                  th:text="${cartCount}" */
+    .cart-badge {
+      position: absolute; top: -6px; right: -6px;
+      background: var(--red); color: #fff; font-size: .62rem; font-weight: 800;
+      width: 18px; height: 18px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+    }
+
+    /* ── HAMBURGER MENU BUTTON ── */
+    .btn-menu {
+      display: flex; align-items: center; gap: 7px;
+      padding: 8px 16px; font-family: var(--ff-body); font-size: .84rem; font-weight: 700;
+      background: var(--gold); color: var(--midnight);
+      border: none; border-radius: var(--r-sm); cursor: pointer; transition: all var(--ease);
+      white-space: nowrap;
+    }
+    .btn-menu:hover { background: #fbbf24; }
+
+    /* ── DROPDOWN MENU ── */
+    .menu-wrap { position: relative; }
+    .menu-dropdown {
+      position: absolute; top: calc(100% + 12px); right: 0;
+      background: var(--card); border: 1px solid var(--bd);
+      border-radius: var(--r-xl); box-shadow: var(--sh-xl);
+      min-width: 240px; padding: 8px 0; z-index: 600; display: none;
+      animation: menuIn .18s ease;
+    }
+    @keyframes menuIn {
+      from { opacity: 0; transform: translateY(-8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .menu-dropdown.open { display: block; }
+
+    .menu-user {
+      padding: 16px 20px 12px; border-bottom: 1px solid var(--bd); margin-bottom: 6px;
+    }
+    .menu-user-name { font-size: .93rem; font-weight: 700; color: var(--tx); margin-bottom: 2px; }
+    .menu-user-email { font-size: .74rem; color: var(--tx-3); }
+    .menu-user-role {
+      display: inline-flex; align-items: center; gap: 4px;
+      background: var(--blue-soft); color: var(--blue-deep);
+      font-size: .7rem; font-weight: 700; padding: 2px 9px; border-radius: 20px; margin-top: 6px;
+    }
+
+    .menu-item {
+      display: flex; align-items: center; gap: 12px;
+      padding: 10px 20px; font-size: .86rem; font-weight: 500; color: var(--tx);
+      cursor: pointer; transition: background var(--ease);
+    }
+    .menu-item:hover { background: var(--surface-2); }
+    .menu-item .mi-icon { font-size: 1rem; width: 22px; text-align: center; flex-shrink: 0; }
+    .menu-item .mi-text { flex: 1; }
+    .menu-item .mi-badge {
+      background: var(--blue-deep); color: #fff;
+      font-size: .67rem; font-weight: 700; padding: 2px 7px; border-radius: 20px;
+    }
+    .menu-item.danger { color: var(--red); }
+    .menu-item.current { background: var(--blue-soft); color: var(--blue-deep); font-weight: 600; }
+    .menu-divider { border: none; border-top: 1px solid var(--bd); margin: 6px 0; }
+
+    /* ═══════════════════════════════════════════════════
+       HERO BANNER — editorial style matching index.html
+    ═══════════════════════════════════════════════════ */
+    .hero {
+      background: var(--midnight);
+      background-image:
+        radial-gradient(ellipse 75% 65% at 70% 45%, rgba(37,99,235,.28) 0%, transparent 60%),
+        radial-gradient(ellipse 40% 50% at 10% 80%, rgba(245,158,11,.12) 0%, transparent 55%);
+      padding: 64px 0 52px; color: #fff; position: relative; overflow: hidden;
+    }
+    .hero::before {
+      content: '';
+      position: absolute; inset: 0;
+      background-image: radial-gradient(circle, rgba(255,255,255,.04) 1px, transparent 1px);
+      background-size: 28px 28px; pointer-events: none;
+    }
+    .container { max-width: 1240px; margin: 0 auto; padding: 0 28px; position: relative; z-index: 1; }
+
+
+
+  .hero-grid {
+display: grid;
+grid-template-columns: 1fr auto;  /* IMPORTANT */
+align-items: center;
+gap: 40px;
+}
+
+    .hero-label {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: rgba(245,158,11,.15); border: 1px solid rgba(245,158,11,.3);
+      color: var(--gold); font-size: .73rem; font-weight: 700;
+      letter-spacing: .09em; text-transform: uppercase;
+      padding: 5px 14px; border-radius: 30px; margin-bottom: 18px;
+    }
+    .hero-label .dot { width: 7px; height: 7px; background: var(--gold); border-radius: 50%; animation: pulse 2s ease-in-out infinite; }
+    @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.4;transform:scale(.7)} }
+
+    /*
+      THYMELEAF: th:text="'Welcome back, ' + ${session.user.firstname} + '!'"
+      Shows personalized greeting from logged-in student's session data
+    */
+    .hero-h1 {
+      font-family: var(--ff-head); font-size: 3.2rem;
+      font-weight: 900; line-height: 1.1; letter-spacing: -.04em; margin-bottom: 16px;
+    }
+    .hero-h1 .acc { color: var(--gold); }
+    .hero-sub {
+      font-size: .97rem; color: rgba(255,255,255,.65);
+      max-width: 480px; line-height: 1.82; margin-bottom: 28px;
+    }
+
+    .hero-ctas { display: flex; gap: 14px; flex-wrap: wrap; }
+    .btn-gold {
+      padding: 13px 28px; font-family: var(--ff-body); font-size: .93rem; font-weight: 700;
+      color: var(--midnight); background: var(--gold); border: none;
+      border-radius: var(--r-sm); cursor: pointer; transition: all var(--ease);
+      display: inline-flex; align-items: center; gap: 8px;
+    }
+    .btn-gold:hover { background: #fbbf24; transform: translateY(-2px); box-shadow: 0 8px 24px rgba(245,158,11,.3); }
+    .btn-ghost {
+      padding: 13px 28px; font-family: var(--ff-body); font-size: .93rem; font-weight: 600;
+      color: #fff; background: transparent;
+      border: 1.5px solid rgba(255,255,255,.3); border-radius: var(--r-sm); cursor: pointer; transition: all var(--ease);
+    }
+    .btn-ghost:hover { border-color: rgba(255,255,255,.7); background: rgba(255,255,255,.07); }
+
+    /* ── Hero stats card (right) ── */
+
+
+
+.hero-stats {
+display: flex;
+flex-direction: column;
+gap: 14px;
+align-items: stretch; /* IMPORTANT */
+}
+
+
+.hstat {
+background: rgba(255,255,255,0.07);
+border: 1px solid rgba(255,255,255,0.12);
+border-radius: 12px;
+
+width: 180px;              /* FIX WIDTH */
+height: 90px;              /* RECTANGLE SHAPE */
+
+display: flex;
+flex-direction: column;
+justify-content: center;   /* VERTICAL CENTER */
+align-items: center;       /* HORIZONTAL CENTER */
+
+text-align: center;
+backdrop-filter: blur(8px);
+}
+
+.hstat-n {
+font-family: var(--ff-head);
+font-size: 1.6rem;
+font-weight: 900;
+color: var(--gold);
+line-height: 1;
+}
+
+.hstat-l {
+font-size: 0.72rem;
+color: rgba(255,255,255,0.6);
+margin-top: 4px;
+}
+
+
+
+
+    /* ═══════════════════════════════════════════════════
+       QUICK ACTIONS STRIP
+    ═══════════════════════════════════════════════════ */
+    .quick-strip { background: var(--card); border-bottom: 1px solid var(--bd); padding: 0; }
+    .quick-inner {
+      max-width: 1240px; margin: 0 auto; padding: 0 28px;
+      display: flex; gap: 0; overflow-x: auto;
+    }
+    .quick-link {
+      display: flex; align-items: center; gap: 9px;
+      padding: 16px 22px; font-size: .86rem; font-weight: 600; color: var(--tx-2);
+      border-bottom: 2px solid transparent; white-space: nowrap;
+      transition: all var(--ease); cursor: pointer; flex-shrink: 0;
+    }
+    .quick-link:hover { color: var(--blue-deep); border-bottom-color: var(--blue-deep); }
+    .quick-link.active { color: var(--blue-deep); border-bottom-color: var(--blue-deep); background: var(--blue-soft); }
+    .quick-link .ql-icon { font-size: 1rem; }
+
+    /* ═══════════════════════════════════════════════════
+       SHARED SECTION HELPERS
+    ═══════════════════════════════════════════════════ */
+    .main { padding: 48px 0 80px; }
+    .section { padding: 64px 0; }
+    .section-white { padding: 64px 0; background: var(--card); }
+    .section-dark { padding: 64px 0; background: var(--navy); }
+    .mt-section { margin-top: 56px; }
+
+    .sec-header { margin-bottom: 36px; }
+    .sec-header.center { text-align: center; }
+    .sec-tag {
+      display: inline-block; background: var(--gold-pale); color: #92400e;
+      font-size: .72rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .1em; padding: 5px 14px; border-radius: 20px; margin-bottom: 10px;
+    }
+    .sec-tag-dark { background: rgba(245,158,11,.18); color: var(--gold); }
+    .sec-title {
+      font-family: var(--ff-head); font-size: 2rem;
+      font-weight: 900; color: var(--tx); letter-spacing: -.03em; line-height: 1.15;
+    }
+    .sec-sub { font-size: .93rem; color: var(--tx-3); margin-top: 8px; max-width: 500px; line-height: 1.75; }
+    .sec-row { display: flex; align-items: flex-end; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 28px; }
+    .sec-link { font-size: .84rem; font-weight: 700; color: var(--blue); transition: color var(--ease); }
+    .sec-link:hover { color: var(--blue-deep); text-decoration: underline; }
+    .sec-divider { border: none; border-top: 1px solid var(--bd); margin: 56px 0 0; }
+
+    /* ═══════════════════════════════════════════════════
+       MY COURSES SECTION
+       ─────────────────────────────────────────────────
+       THYMELEAF:
+         th:each="course : ${enrolledCourses}"
+         Shows courses from session-based enrolled list.
+         After checkout, CartController saves purchased courses:
+           session.setAttribute("enrolledCourses", purchasedList);
+    ═══════════════════════════════════════════════════ */
+    .courses-list { display: flex; flex-direction: column; gap: 14px; }
+
+    .mc-card {
+      background: var(--card); border: 1px solid var(--bd-2); border-radius: var(--r-lg);
+      display: grid; grid-template-columns: 60px 1fr auto;
+      align-items: center; gap: 18px; padding: 16px 22px;
+      box-shadow: var(--sh-sm); transition: transform var(--ease), box-shadow var(--ease);
+      animation: cardIn .4s ease both;
+    }
+    @keyframes cardIn { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
+    .mc-card:hover { transform: translateY(-3px); box-shadow: var(--sh-md); }
+
+    .mc-icon {
+      width: 56px; height: 56px; border-radius: 12px; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center; font-size: 1.7rem;
+    }
+    .mci-1 { background: linear-gradient(135deg,#1e3a8a,#2563eb); }
+    .mci-2 { background: linear-gradient(135deg,#064e3b,#10b981); }
+    .mci-3 { background: linear-gradient(135deg,#6d28d9,#a78bfa); }
+    .mci-4 { background: linear-gradient(135deg,#92400e,#f59e0b); }
+    .mci-5 { background: linear-gradient(135deg,#9f1239,#f43f5e); }
+    .mci-6 { background: linear-gradient(135deg,#0c4a6e,#0ea5e9); }
+
+    .mc-info {}
+    .mc-badge {
+      display: inline-block; background: var(--blue-soft); color: var(--blue-deep);
+      font-size: .63rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .05em; padding: 2px 9px; border-radius: 20px; margin-bottom: 4px;
+    }
+    .mc-name { font-size: .95rem; font-weight: 700; color: var(--tx); margin-bottom: 3px; line-height: 1.35; }
+    .mc-trainer { font-size: .78rem; color: var(--tx-3); font-weight: 500; }
+    .mc-meta { display: flex; gap: 12px; margin-top: 6px; flex-wrap: wrap; }
+    .mc-chip {
+      display: flex; align-items: center; gap: 4px;
+      background: var(--surface-2); border: 1px solid var(--bd);
+      font-size: .7rem; color: var(--tx-4); padding: 2px 8px; border-radius: 20px;
+    }
+
+    /* Progress bar */
+    .mc-progress { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
+    .progress-bar { flex: 1; height: 5px; background: var(--bd); border-radius: 10px; overflow: hidden; }
+    .progress-fill { height: 100%; background: linear-gradient(90deg, var(--blue), var(--blue-lt)); border-radius: 10px; transition: width .5s ease; }
+    .progress-label { font-size: .7rem; color: var(--tx-3); font-weight: 600; white-space: nowrap; }
+
+    .mc-right { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; flex-shrink: 0; }
+    .mc-lessons { font-size: .74rem; color: var(--tx-3); font-weight: 500; }
+    .btn-continue {
+      padding: 8px 18px; font-family: var(--ff-body); font-size: .8rem; font-weight: 700;
+      color: #fff; background: var(--blue-deep);
+      border: none; border-radius: var(--r-sm); cursor: pointer; transition: all var(--ease); white-space: nowrap;
+    }
+    .btn-continue:hover { background: var(--blue); }
+
+    /* Empty enrolled courses state */
+    .mc-empty {
+      text-align: center; padding: 56px 24px; background: var(--card);
+      border: 2px dashed var(--bd); border-radius: var(--r-xl);
+    }
+    .mc-empty-icon { font-size: 3rem; margin-bottom: 14px; }
+    .mc-empty h4 { font-family: var(--ff-head); font-size: 1.15rem; font-weight: 700; color: var(--tx); margin-bottom: 8px; }
+    .mc-empty p { font-size: .88rem; color: var(--tx-3); margin-bottom: 22px; max-width: 320px; margin-left: auto; margin-right: auto; }
+    .btn-browse {
+      padding: 11px 26px; font-family: var(--ff-body); font-size: .9rem; font-weight: 700;
+      color: var(--midnight); background: var(--gold);
+      border: none; border-radius: var(--r-sm); cursor: pointer; transition: all var(--ease);
+    }
+    .btn-browse:hover { background: #fbbf24; transform: translateY(-1px); }
+
+    /* ═══════════════════════════════════════════════════
+       PLATFORM FEATURES
+    ═══════════════════════════════════════════════════ */
+    .features-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+    .feat-card {
+      background: var(--surface-2); border: 1px solid var(--bd-2); border-radius: var(--r-xl);
+      padding: 28px 24px; box-shadow: var(--sh-sm);
+      transition: transform var(--ease), box-shadow var(--ease);
+    }
+    .feat-card:hover { transform: translateY(-4px); box-shadow: var(--sh-md); }
+    .feat-icon {
+      width: 52px; height: 52px; border-radius: 14px;
+      display: flex; align-items: center; justify-content: center; font-size: 1.4rem; margin-bottom: 16px;
+    }
+    .fi-1{background:#dbeafe;} .fi-2{background:#d1fae5;} .fi-3{background:#fef3c7;}
+    .fi-4{background:#ede9fe;} .fi-5{background:#fce7f3;} .fi-6{background:#dcfce7;}
+    .feat-card h3 { font-size: .95rem; font-weight: 700; color: var(--tx); margin-bottom: 7px; }
+    .feat-card p  { font-size: .82rem; color: var(--tx-3); line-height: 1.75; }
+
+    /* ═══════════════════════════════════════════════════
+       RECOMMENDED COURSES
+    ═══════════════════════════════════════════════════ */
+    .rec-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px; }
+    .rec-card {
+      background: var(--card); border: 1px solid var(--bd-2); border-radius: var(--r-xl);
+      overflow: hidden; box-shadow: var(--sh-sm);
+      transition: transform var(--ease), box-shadow var(--ease);
+      display: flex; flex-direction: column;
+      animation: cardIn .5s ease both;
+    }
+    .rec-card:hover { transform: translateY(-5px); box-shadow: var(--sh-lg); }
+    .rec-band {
+      height: 100px; display: flex; align-items: center; padding: 0 22px;
+      position: relative; overflow: hidden; flex-shrink: 0;
+    }
+    .rec-band::after {
+      content: ''; position: absolute; right: -16px; top: -16px;
+      width: 100px; height: 100px; border-radius: 50%; background: rgba(255,255,255,.12);
+    }
+    .rbi-1{background:linear-gradient(135deg,#1e3a8a,#2563eb);}
+    .rbi-2{background:linear-gradient(135deg,#064e3b,#10b981);}
+    .rbi-3{background:linear-gradient(135deg,#6d28d9,#a78bfa);}
+    .rbi-4{background:linear-gradient(135deg,#92400e,#f59e0b);}
+    .rbi-5{background:linear-gradient(135deg,#9f1239,#f43f5e);}
+    .rbi-6{background:linear-gradient(135deg,#0c4a6e,#0ea5e9);}
+    .rec-emoji { font-size: 2.2rem; position: relative; z-index: 1; filter: drop-shadow(0 2px 6px rgba(0,0,0,.25)); }
+    .rec-pill {
+      position: absolute; top: 10px; right: 10px;
+      font-size: .62rem; font-weight: 800; text-transform: uppercase; letter-spacing: .07em;
+      padding: 3px 9px; border-radius: 20px; z-index: 2;
+    }
+    .pill-free { background: rgba(16,185,129,.9); color: #fff; }
+    .pill-paid { background: rgba(255,255,255,.93); color: var(--blue-deep); }
+    .rec-body { padding: 16px 18px; flex: 1; display: flex; flex-direction: column; gap: 6px; }
+    .rec-name { font-size: .92rem; font-weight: 700; color: var(--tx); line-height: 1.38;
+      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .rec-trainer { font-size: .79rem; font-weight: 700; color: var(--blue); display: flex; align-items: center; gap: 6px; }
+    .rec-desc { font-size: .78rem; color: var(--tx-3); line-height: 1.6; flex: 1;
+      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .rec-meta { font-size: .72rem; color: var(--tx-4); margin-top: 2px; }
+    .rec-footer {
+      padding: 12px 18px 16px; border-top: 1px solid var(--bd-2);
+      display: flex; align-items: center; justify-content: space-between; flex-shrink: 0;
+    }
+    .rec-price { font-family: var(--ff-head); font-size: 1.05rem; font-weight: 900; color: var(--blue-deep); }
+    .rec-price-free { font-family: var(--ff-head); font-size: 1.05rem; font-weight: 900; color: var(--green); }
+    .rec-btns { display: flex; gap: 7px; }
+    .btn-add-cart {
+      padding: 7px 13px; font-family: var(--ff-body); font-size: .77rem; font-weight: 700;
+      color: var(--blue-deep); background: var(--blue-soft); border: 1.5px solid #bfdbfe;
+      border-radius: var(--r-sm); cursor: pointer; transition: all var(--ease);
+    }
+    .btn-add-cart:hover { background: var(--blue-deep); color: #fff; border-color: var(--blue-deep); }
+    .btn-details {
+      padding: 7px 13px; font-family: var(--ff-body); font-size: .77rem; font-weight: 700;
+      color: #fff; background: var(--blue-deep); border: none;
+      border-radius: var(--r-sm); cursor: pointer; transition: all var(--ease);
+    }
+    .btn-details:hover { background: var(--blue); }
+
+    /* ═══════════════════════════════════════════════════
+       CERTIFICATIONS
+    ═══════════════════════════════════════════════════ */
+    .cert-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+    .cert-steps { display: flex; flex-direction: column; gap: 14px; }
+    .cert-step {
+      background: var(--card); border: 1px solid var(--bd-2); border-radius: var(--r-lg);
+      padding: 18px 20px; display: flex; gap: 16px; box-shadow: var(--sh-sm);
+    }
+    .cstep-num {
+      width: 38px; height: 38px; border-radius: 10px; background: var(--blue-deep);
+      color: #fff; font-family: var(--ff-head); font-size: .85rem; font-weight: 700;
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    }
+    .cstep-title { font-size: .9rem; font-weight: 700; color: var(--tx); margin-bottom: 3px; }
+    .cstep-desc  { font-size: .79rem; color: var(--tx-3); line-height: 1.6; }
+    .cert-preview {
+      background: linear-gradient(135deg, var(--midnight), var(--blue-deep));
+      border-radius: var(--r-xl); padding: 36px 30px;
+      text-align: center; color: #fff; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 10px; box-shadow: var(--sh-xl);
+      position: relative; overflow: hidden;
+    }
+    .cert-preview::before {
+      content: ''; position: absolute; inset: 0;
+      background-image: radial-gradient(circle, rgba(255,255,255,.03) 1px, transparent 1px);
+      background-size: 22px 22px;
+    }
+    .cert-preview > * { position: relative; z-index: 1; }
+    .cert-icon { font-size: 3rem; }
+    .cert-label { font-size: .7rem; color: rgba(255,255,255,.5); text-transform: uppercase; letter-spacing: .12em; }
+    .cert-title { font-family: var(--ff-head); font-size: 1.5rem; font-weight: 900; }
+    .cert-name { font-size: 1.1rem; font-weight: 700; color: var(--gold); }
+    .cert-tags { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-top: 4px; }
+    .cert-tag { background: rgba(255,255,255,.12); font-size: .7rem; font-weight: 600; padding: 3px 12px; border-radius: 20px; }
+    .btn-cert {
+      padding: 10px 24px; font-family: var(--ff-body); font-size: .86rem; font-weight: 700;
+      color: var(--midnight); background: var(--gold); border: none;
+      border-radius: var(--r-sm); cursor: pointer; margin-top: 8px; transition: all var(--ease);
+    }
+    .btn-cert:hover { background: #fbbf24; }
+
+    /* ═══════════════════════════════════════════════════
+       HELP SECTION
+    ═══════════════════════════════════════════════════ */
+    .help-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+    .help-card {
+      background: var(--card); border: 1px solid var(--bd-2); border-radius: var(--r-lg);
+      padding: 24px 20px; box-shadow: var(--sh-sm);
+      transition: transform var(--ease), box-shadow var(--ease);
+      display: flex; flex-direction: column; gap: 8px;
+    }
+    .help-card:hover { transform: translateY(-3px); box-shadow: var(--sh-md); }
+    .help-icon { font-size: 1.6rem; }
+    .help-title { font-size: .9rem; font-weight: 700; color: var(--tx); }
+    .help-desc  { font-size: .8rem; color: var(--tx-3); line-height: 1.65; flex: 1; }
+    .help-link  { font-size: .8rem; font-weight: 700; color: var(--blue); margin-top: 4px; transition: color var(--ease); }
+    .help-link:hover { color: var(--blue-deep); text-decoration: underline; }
+
+    /* FAQ */
+    .faq-list { display: flex; flex-direction: column; gap: 10px; margin-top: 24px; }
+    .faq-item { background: var(--card); border: 1px solid var(--bd-2); border-radius: var(--r-lg); overflow: hidden; box-shadow: var(--sh-sm); }
+    .faq-q {
+      width: 100%; text-align: left; padding: 16px 22px;
+      background: none; border: none; font-family: var(--ff-body); font-size: .88rem;
+      font-weight: 600; color: var(--tx); cursor: pointer;
+      display: flex; align-items: center; justify-content: space-between; gap: 12px; transition: background var(--ease);
+    }
+    .faq-q:hover { background: var(--surface-2); }
+    .faq-arrow { font-size: .75rem; color: var(--tx-4); transition: transform .25s ease; flex-shrink: 0; }
+    .faq-item.open .faq-arrow { transform: rotate(180deg); }
+    .faq-a {
+      max-height: 0; overflow: hidden; transition: max-height .3s ease, padding .3s ease;
+      font-size: .83rem; color: var(--tx-3); line-height: 1.7; padding: 0 22px;
+    }
+    .faq-item.open .faq-a { max-height: 200px; padding: 0 22px 18px; }
+
+    /* ═══════════════════════════════════════════════════
+       CTA STRIP
+    ═══════════════════════════════════════════════════ */
+    .cta-strip {
+      background: var(--midnight);
+      background-image:
+        radial-gradient(ellipse 70% 80% at 80% 50%, rgba(37,99,235,.3) 0%, transparent 60%),
+        radial-gradient(ellipse 40% 50% at 5% 50%, rgba(245,158,11,.14) 0%, transparent 55%);
+      border-radius: var(--r-xl); padding: 48px 52px; margin-top: 56px;
+      display: flex; align-items: center; justify-content: space-between;
+      flex-wrap: wrap; gap: 28px; position: relative; overflow: hidden;
+    }
+    .cta-strip::before {
+      content: ''; position: absolute; inset: 0;
+      background-image: radial-gradient(circle, rgba(255,255,255,.025) 1px, transparent 1px);
+      background-size: 24px 24px;
+    }
+    .cta-text { position: relative; z-index: 1; }
+    .cta-text h3 { font-family: var(--ff-head); font-size: 1.7rem; font-weight: 900; color: #fff; margin-bottom: 8px; letter-spacing: -.02em; }
+    .cta-text h3 span { color: var(--gold); }
+    .cta-text p { font-size: .9rem; color: rgba(255,255,255,.65); max-width: 400px; }
+    .cta-btns { display: flex; gap: 12px; flex-wrap: wrap; position: relative; z-index: 1; }
+
+    /* ═══════════════════════════════════════════════════
+       FOOTER
+    ═══════════════════════════════════════════════════ */
+    footer { background: var(--navy); color: rgba(255,255,255,.4); padding: 32px 0; }
+    .footer-inner {
+      max-width: 1240px; margin: 0 auto; padding: 0 28px;
+      display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; font-size: .82rem;
+    }
+    footer a { color: var(--gold); transition: color var(--ease); }
+    footer a:hover { color: #fbbf24; }
+
+    /* ═══════════════════════════════════════════════════
+       RESPONSIVE
+    ═══════════════════════════════════════════════════ */
+    @media (max-width: 1100px) {
+      .features-grid { grid-template-columns: repeat(2, 1fr); }
+      .help-grid { grid-template-columns: repeat(2, 1fr); }
+      .cert-layout { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 900px) {
+      .hero-grid { grid-template-columns: 1fr; }
+      .hero-card { display: none; }
+      .cta-strip { padding: 36px 28px; flex-direction: column; text-align: center; }
+      .cta-text p { margin: 0 auto; }
+      .cta-btns { justify-content: center; }
+    }
+    @media (max-width: 768px) {
+      .nav-links { display: none; }
+      .nav-name { display: none; }
+      .mc-card { grid-template-columns: 50px 1fr; }
+      .mc-right { display: none; }
+      .hero-h1 { font-size: 2.2rem; }
+    }
+    @media (max-width: 600px) {
+      .features-grid { grid-template-columns: 1fr; }
+      .rec-grid { grid-template-columns: 1fr; }
+      .help-grid { grid-template-columns: 1fr 1fr; }
+      .nav-inner, .container { padding: 0 18px; }
+      .hero { padding: 44px 0 36px; }
+    }
+    @media (max-width: 420px) {
+      .help-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════════
+     NAVBAR
+     Matches index.html / public_courses.html exactly
+═══════════════════════════════════════════════════════════ -->
+<nav class="navbar">
+  <div class="nav-inner">
+
+    <!-- Logo with gold square mark — same as index.html -->
+    <a href="/student-home" class="nav-logo">
+      <div class="logo-mark">📚</div>
+      CourseHub
+    </a>
+
+    <!-- Desktop nav links with active state -->
+    <ul class="nav-links">
+      <li><a href="/student-home" class="active">Dashboard</a></li>
+      <li><a href="/all-courses">Browse Courses</a></li>
+      <li><a href="#my-courses">My Courses</a></li>
+      <li><a href="#certifications">Certificates</a></li>
+    </ul>
+
+    <div class="nav-right">
+      <span class="nav-badge">🎓 Student</span>
+      <!--
+        THYMELEAF: th:text="${session.user.firstname}"
+        Reads first name from HttpSession → User object stored at login
+        ServicesController.validateUser() does: session.setAttribute("user", user)
+      -->
+      <span class="nav-name" th:text="${session.user.firstname}">Rahul</span>
+
+      <!-- CART BUTTON WITH LIVE COUNT
+           THYMELEAF: th:if="${cartCount != null and cartCount > 0}" → shows red badge
+                      th:text="${cartCount}" → shows number
+           HOW cartCount IS SET: In NavController.studentHome():
+             Object cart = session.getAttribute("cart");
+             int cartCount = (cart instanceof List) ? ((List)cart).size() : 0;
+             model.addAttribute("cartCount", cartCount);
+      -->
+      <div class="cart-wrap">
+        <a href="/cart">
+          <button class="btn-cart">🛒 Cart</button>
+        </a>
+        <span class="cart-badge"
+              th:if="${cartCount != null and cartCount > 0}"
+              th:text="${cartCount}">0</span>
+      </div>
+
+      <!-- HAMBURGER MENU BUTTON -->
+      <div class="menu-wrap">
+        <button class="btn-menu" id="menuToggle">☰ Menu</button>
+
+        <!-- DROPDOWN MENU
+             Contains all navigation options for mobile + desktop
+        -->
+        <div class="menu-dropdown" id="menuDropdown">
+
+          <!-- User info header
+               THYMELEAF: reads from HttpSession user object
+          -->
+          <div class="menu-user">
+            <!--
+              th:text="${session.user.firstname} + ' ' + ${session.user.lastname}"
+            -->
+            <div class="menu-user-name" th:text="${session.user.firstname} + ' ' + ${session.user.lastname}">Rahul Kumar</div>
+            <!--
+              th:text="${session.user.email}"
+            -->
+            <div class="menu-user-email" th:text="${session.user.email}">rahul@example.com</div>
+            <span class="menu-user-role">🎓 Student</span>
+          </div>
+
+          <!-- Navigation items -->
+          <a href="/student-home">
+            <div class="menu-item current">
+              <span class="mi-icon">🏠</span>
+              <span class="mi-text">Dashboard</span>
+            </div>
+          </a>
+
+          <a href="/student-profile">
+            <div class="menu-item">
+              <span class="mi-icon">👤</span>
+              <span class="mi-text">My Profile</span>
+            </div>
+          </a>
+
+          <a href="#my-courses">
+            <div class="menu-item">
+              <span class="mi-icon">📚</span>
+              <span class="mi-text">My Enrolled Courses</span>
+            </div>
+          </a>
+
+          <!-- MY COURSES page — created separately -->
+          <a href="/my-courses">
+            <div class="menu-item">
+              <span class="mi-icon">🎓</span>
+              <span class="mi-text">My Learning</span>
+            </div>
+          </a>
+
+          <a href="/cart">
+            <div class="menu-item">
+              <span class="mi-icon">🛒</span>
+              <span class="mi-text">My Cart</span>
+              <!--
+                THYMELEAF: th:if="${cartCount != null and cartCount > 0}"
+                           th:text="${cartCount}"
+              -->
+              <span class="mi-badge"
+                    th:if="${cartCount != null and cartCount > 0}"
+                    th:text="${cartCount}">0</span>
+            </div>
+          </a>
+
+          <a href="/all-courses">
+            <div class="menu-item">
+              <span class="mi-icon">🔍</span>
+              <span class="mi-text">Explore Courses</span>
+            </div>
+          </a>
+
+          <a href="#certifications">
+            <div class="menu-item">
+              <span class="mi-icon">🏆</span>
+              <span class="mi-text">My Certificates</span>
+            </div>
+          </a>
+
+          <a href="/student-profile">
+            <div class="menu-item">
+              <span class="mi-icon">⚙️</span>
+              <span class="mi-text">Account Settings</span>
+            </div>
+          </a>
+
+          <hr class="menu-divider">
+
+          <a href="/logout">
+            <div class="menu-item danger">
+              <span class="mi-icon">🚪</span>
+              <span class="mi-text">Logout</span>
+            </div>
+          </a>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</nav>
+
+<!-- ═══════════════════════════════════════════════════════════
+     HERO SECTION — editorial style, dark midnight background
+     Matches index.html visual language exactly
+═══════════════════════════════════════════════════════════ -->
+<section class="hero">
+  <div class="container">
+    <div class="hero-grid">
+
+      <!-- Left: personalized welcome + CTAs -->
+      <div>
+        <div class="hero-label">
+          <span class="dot"></span>
+          Your Learning Dashboard
+        </div>
+        <!--
+          THYMELEAF: th:text="'Welcome back, ' + ${session.user.firstname} + '!'"
+          Personalizes heading with logged-in student name from session
+        -->
+        <h1 class="hero-h1">
+          Welcome back,<br>
+          <span class="acc" th:text="${session.user.firstname} + ' 👋'">Rahul 👋</span>
+        </h1>
+        <p class="hero-sub">
+          Your learning journey continues here. Explore new courses,
+          track your progress, and earn certificates that advance your career.
+        </p>
+        <div class="hero-ctas">
+          <a href="#my-courses"><button class="btn-gold">📚 My Courses</button></a>
+          <a href="/all-courses"><button class="btn-ghost">🔍 Browse All Courses</button></a>
+        </div>
+      </div>
+
+      <!-- Right: stat cards panel -->
+
+
+
+      <div class="hero-stats">
+        <!--
+          THYMELEAF: th:text="${courseCount}"
+          courseCount = tService.getAllCourses().size() from NavController
+        -->
+        <div class="hstat">
+          <span class="hstat-n" th:text="${courseCount}">0</span>
+          <div class="hstat-l">Courses Available</div>
+        </div>
+
+        <div class="hstat">
+          <span class="hstat-n">∞</span>
+          <div class="hstat-l">Lifetime Access</div>
+        </div>
+
+
+        <div class="hstat">
+          <span class="hstat-n">🏆</span>
+          <div class="hstat-l">Earn Certificates</div>
+        </div>
+
+      </div>
+
+
+
+
+    </div>
+  </div>
+</section>
+
+
+
+
+<!-- QUICK LINKS STRIP — sticky contextual navigation -->
+<div class="quick-strip">
+  <div class="quick-inner">
+    <a href="#my-courses"   class="quick-link active"><span class="ql-icon">📚</span> My Courses</a>
+    <a href="#recommended"  class="quick-link"><span class="ql-icon">✨</span> Recommended</a>
+    <a href="#features"     class="quick-link"><span class="ql-icon">⚡</span> Features</a>
+    <a href="#certifications" class="quick-link"><span class="ql-icon">🏆</span> Certificates</a>
+    <a href="#help"         class="quick-link"><span class="ql-icon">❓</span> Help</a>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     MAIN CONTENT
+═══════════════════════════════════════════════════════════ -->
+<main class="main">
+  <div class="container">
+
+    <!-- ─────────────────────────────────────────────────
+         SECTION 1 ▸ MY COURSES
+         ─────────────────────────────────────────────────
+         THYMELEAF:
+           th:if="${#lists.isEmpty(enrolledCourses)}" → empty state
+           th:each="course, iter : ${enrolledCourses}" → course cards
+
+         HOW enrolledCourses IS POPULATED:
+           In CartController.checkout():
+             List<Course> cart = getCart(session);
+             // Store purchased courses in session as enrolled
+             List<Course> enrolled = getEnrolled(session);
+             enrolled.addAll(cart);
+             session.setAttribute("enrolledCourses", enrolled);
+             session.removeAttribute("cart");
+             session.setAttribute("cartCount", 0);
+
+           This way, after checkout, courses move from cart → enrolled list.
+           A proper DB solution would use an Enrollment entity (future task).
+    ───────────────────────────────────────────────── -->
+    <div id="my-courses">
+      <div class="sec-row">
+        <div>
+          <span class="sec-tag">📚 Enrolled</span>
+          <h2 class="sec-title">My Courses</h2>
+          <p class="sec-sub">Courses you have purchased and enrolled in. Pick up right where you left off.</p>
+        </div>
+        <a href="/my-courses" class="sec-link">View all with lessons →</a>
+      </div>
+
+      <!--
+        EMPTY STATE — shown when enrolledCourses is empty
+        THYMELEAF: th:if="${#lists.isEmpty(enrolledCourses)}"
+      -->
+      <div class="mc-empty" th:if="${#lists.isEmpty(enrolledCourses)}">
+        <div class="mc-empty-icon">📭</div>
+        <h4>No Courses Yet</h4>
+        <p>You haven't enrolled in any course yet. Browse our catalogue and start your learning journey today.</p>
+        <a href="/all-courses"><button class="btn-browse">Browse All Courses →</button></a>
+      </div>
+
+      <!--
+        COURSE LIST — loops through enrolled courses
+        THYMELEAF: th:unless="${#lists.isEmpty(enrolledCourses)}"
+                   th:each="course, iter : ${enrolledCourses}"
+      -->
+      <div class="courses-list" th:unless="${#lists.isEmpty(enrolledCourses)}">
+        <div class="mc-card"
+             th:each="course, iter : ${enrolledCourses}"
+             th:style="'animation-delay:' + ${iter.index * 60} + 'ms'">
+
+          <!--
+            Icon with cycling colour
+            iter.index % 6 gives 0–5 to cycle through 6 colour classes
+          -->
+          <div class="mc-icon"
+               th:classappend="${iter.index % 6 == 0} ? 'mci-1' :
+                        (${iter.index % 6 == 1} ? 'mci-2' :
+                        (${iter.index % 6 == 2} ? 'mci-3' :
+                        (${iter.index % 6 == 3} ? 'mci-4' :
+                        (${iter.index % 6 == 4} ? 'mci-5' : 'mci-6'))))">
+            📘
+          </div>
+
+          <div class="mc-info">
+            <!-- Course type badge -->
+            <span class="mc-badge" th:text="${course.courseType}">Paid</span>
+            <!-- Course name — no ID shown, ID used only in links -->
+            <div class="mc-name" th:text="${course.courseName}">Course Name</div>
+            <!-- Trainer name -->
+            <div class="mc-trainer" th:text="'By ' + ${course.trainerName}">By Trainer</div>
+            <!-- Lesson count from OneToMany relationship -->
+            <div class="mc-meta">
+              <span class="mc-chip">📖 <span th:text="${#lists.size(course.lessons)} + ' lessons'">0 lessons</span></span>
+            </div>
+            <!-- Progress bar — static for now, wire to lesson completion table later -->
+            <div class="mc-progress">
+              <div class="progress-bar"><div class="progress-fill" style="width:0%"></div></div>
+              <span class="progress-label">0% complete</span>
+            </div>
+          </div>
+
+          <div class="mc-right">
+            <span class="mc-lessons" th:text="${#lists.size(course.lessons)} + ' lessons'">0 lessons</span>
+            <!--
+              "Continue Learning" → goes to my-course-detail page
+              THYMELEAF: th:href="@{/my-course/{id}(id=${course.courseId})}"
+              This opens the lesson viewer for this course
+            -->
+            <a th:href="@{/my-course/{id}(id=${course.courseId})}">
+              <button class="btn-continue">▶ Continue</button>
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <hr class="sec-divider">
+
+
+
+
+
+
+
+
+
+    <!-- ─────────────────────────────────────────────────
+         SECTION 2 ▸ RECOMMENDED COURSES
+         ─────────────────────────────────────────────────
+         THYMELEAF:
+           th:each="course, iter : ${courses}"
+           ${courses} = first 6 from tService.getAllCourses()
+           set by NavController.studentHome()
+    ───────────────────────────────────────────────── -->
+    <div id="recommended" class="mt-section">
+      <div class="sec-row">
+        <div>
+          <span class="sec-tag">✨ Explore</span>
+          <h2 class="sec-title">Recommended Courses</h2>
+          <p class="sec-sub">Handpicked courses to expand your skills. Add to cart and start learning today.</p>
+        </div>
+        <a href="/all-courses" class="sec-link">View all courses →</a>
+      </div>
+
+      <!--
+        THYMELEAF: th:if="${#lists.isEmpty(courses)}" → no courses available
+      -->
+      <div style="text-align:center;padding:40px;color:var(--tx-3);" th:if="${#lists.isEmpty(courses)}">
+        <p>No courses available yet. Check back soon!</p>
+      </div>
+
+      <!--
+        DYNAMIC COURSE CARDS
+        th:each="course, iter : ${courses}" loops all recommended courses
+        iter.index % 6 cycles band colours
+      -->
+      <div class="rec-grid" th:unless="${#lists.isEmpty(courses)}">
+        <div class="rec-card"
+             th:each="course, iter : ${courses}"
+             th:style="'animation-delay:' + ${iter.index * 60} + 'ms'">
+
+          <!-- Colour band — cycles 6 colours using iter.index % 6 -->
+          <div class="rec-band"
+               th:classappend="${iter.index % 6 == 0} ? 'rbi-1' :
+                        (${iter.index % 6 == 1} ? 'rbi-2' :
+                        (${iter.index % 6 == 2} ? 'rbi-3' :
+                        (${iter.index % 6 == 3} ? 'rbi-4' :
+                        (${iter.index % 6 == 4} ? 'rbi-5' : 'rbi-6'))))">
+            <div class="rec-emoji">📘</div>
+            <!-- Free/Paid pill — th:if for conditional display -->
+            <span class="rec-pill pill-free" th:if="${course.courseType == 'free'}">Free</span>
+            <span class="rec-pill pill-paid" th:unless="${course.courseType == 'free'}">Paid</span>
+          </div>
+
+          <div class="rec-body">
+            <!-- Course name — ID intentionally hidden, used only in hrefs -->
+            <div class="rec-name" th:text="${course.courseName}">Course Name</div>
+            <!-- Trainer name — bold per design requirement -->
+            <div class="rec-trainer">👤 <span th:text="${course.trainerName}">Trainer</span></div>
+            <div class="rec-desc" th:text="${course.courseShortDescription}">Description</div>
+            <div class="rec-meta">📖 <span th:text="${#lists.size(course.lessons)} + ' lessons'">0 lessons</span></div>
+          </div>
+
+          <div class="rec-footer">
+            <div>
+              <!-- Price display — conditional based on courseType -->
+              <div class="rec-price-free" th:if="${course.courseType == 'free'}">Free</div>
+              <div class="rec-price" th:unless="${course.courseType == 'free'}"
+                   th:text="'₹' + ${course.coursePrice}">₹999</div>
+            </div>
+            <div class="rec-btns">
+              <!--
+                ADD TO CART: th:href="@{/cart/add(courseId=${course.courseId})}"
+                → CartController.addToCart() — adds to session cart list
+              -->
+              <a th:href="@{/cart/add(courseId=${course.courseId})}">
+                <button class="btn-add-cart">+ Cart</button>
+              </a>
+              <!--
+                VIEW DETAILS: th:href="@{/course-details/{id}(id=${course.courseId})}"
+                → CourseDetailsController — shows full course + lesson list
+              -->
+              <a th:href="@{/course-details/{id}(id=${course.courseId})}">
+                <button class="btn-details">Details</button>
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <hr class="sec-divider">
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    <!-- ─────────────────────────────────────────────────
+         SECTION 3 ▸ PLATFORM FEATURES
+    ───────────────────────────────────────────────── -->
+    <div id="features" class="mt-section">
+      <div class="sec-header center">
+        <span class="sec-tag">⚡ Platform</span>
+        <h2 class="sec-title">Everything You Need to Learn Well</h2>
+        <p class="sec-sub" style="margin:8px auto 0;">Built for students who want to grow skills that actually matter in the real world.</p>
+      </div>
+      <div class="features-grid">
+        <div class="feat-card">
+          <div class="feat-icon fi-1">🎥</div>
+          <h3>HD Video Lessons</h3>
+          <p>Stream every lesson in high quality on any device. Pause, rewind, and replay at your own pace.</p>
+        </div>
+        <div class="feat-card">
+          <div class="feat-icon fi-2">📄</div>
+          <h3>Downloadable Notes</h3>
+          <p>PDF study materials attached to every lesson so you can study offline whenever you want.</p>
+        </div>
+        <div class="feat-card">
+          <div class="feat-icon fi-3">🛒</div>
+          <h3>Easy Checkout</h3>
+          <p>Add courses to cart, pay once with a single transaction, and get instant lifetime access.</p>
+        </div>
+        <div class="feat-card">
+          <div class="feat-icon fi-4">💬</div>
+          <h3>Q&amp;A Discussion</h3>
+          <p>Ask questions on any lesson and get direct answers from your expert trainer.</p>
+        </div>
+        <div class="feat-card">
+          <div class="feat-icon fi-5">🏆</div>
+          <h3>Verified Certificates</h3>
+          <p>Earn a certificate on course completion — shareable directly on LinkedIn.</p>
+        </div>
+        <div class="feat-card">
+          <div class="feat-icon fi-6">📱</div>
+          <h3>Learn Anywhere</h3>
+          <p>Fully responsive design. Pick up exactly where you left off on any screen size.</p>
+        </div>
+      </div>
+    </div>
+
+    <hr class="sec-divider">
+
+
+
+    <!-- ─────────────────────────────────────────────────
+         SECTION 4 ▸ CERTIFICATIONS
+    ───────────────────────────────────────────────── -->
+    <div id="certifications" class="mt-section">
+      <div class="sec-header center">
+        <span class="sec-tag">🏆 Certificates</span>
+        <h2 class="sec-title">Earn Verified Certificates</h2>
+        <p class="sec-sub" style="margin:8px auto 0;">Complete any course and receive a shareable certificate you can add to LinkedIn.</p>
+      </div>
+      <div class="cert-layout">
+        <div class="cert-steps">
+          <div class="cert-step">
+            <div class="cstep-num">01</div>
+            <div>
+              <div class="cstep-title">Browse &amp; Add to Cart</div>
+              <div class="cstep-desc">Find a course you love, add it to your cart, and proceed to checkout.</div>
+            </div>
+          </div>
+          <div class="cert-step">
+            <div class="cstep-num">02</div>
+            <div>
+              <div class="cstep-title">Complete Checkout</div>
+              <div class="cstep-desc">Pay once for lifetime access. All courses unlock instantly after payment.</div>
+            </div>
+          </div>
+          <div class="cert-step">
+            <div class="cstep-num">03</div>
+            <div>
+              <div class="cstep-title">Watch All Lessons</div>
+              <div class="cstep-desc">Complete every video lesson in the course at your own pace.</div>
+            </div>
+          </div>
+          <div class="cert-step">
+            <div class="cstep-num">04</div>
+            <div>
+              <div class="cstep-title">Download &amp; Share</div>
+              <div class="cstep-desc">Download your verified certificate as PDF and share it on LinkedIn.</div>
+            </div>
+          </div>
+        </div>
+        <div class="cert-preview">
+          <div class="cert-icon">🏅</div>
+          <div class="cert-label">Certificate of Completion</div>
+          <div class="cert-title">CourseHub</div>
+          <div class="cert-label">This certifies that</div>
+          <!--
+            THYMELEAF: th:text="${session.user.firstname} + ' ' + ${session.user.lastname}"
+          -->
+          <div class="cert-name" th:text="${session.user.firstname} + ' ' + ${session.user.lastname}">Rahul Kumar</div>
+          <div class="cert-label">has successfully completed</div>
+          <div style="font-size:.95rem;font-weight:600;color:var(--gold);">Spring Boot for Beginners</div>
+          <div class="cert-tags">
+            <span class="cert-tag">✅ Verified</span>
+            <span class="cert-tag">📄 Downloadable</span>
+            <span class="cert-tag">🔗 Shareable</span>
+          </div>
+          <button class="btn-cert">🏆 View Sample Certificate</button>
+        </div>
+      </div>
+    </div>
+
+    <hr class="sec-divider">
+
+    <!-- ─────────────────────────────────────────────────
+         SECTION 5 ▸ HELP
+    ───────────────────────────────────────────────── -->
+    <div id="help" class="mt-section">
+      <div class="sec-header">
+        <span class="sec-tag">❓ Support</span>
+        <h2 class="sec-title">Help &amp; Support</h2>
+        <p class="sec-sub">Need help? Find answers or reach out to our support team.</p>
+      </div>
+      <div class="help-grid">
+        <div class="help-card">
+          <div class="help-icon">📖</div>
+          <div class="help-title">Getting Started</div>
+          <p class="help-desc">Learn how to browse, add to cart, and start your first lesson in minutes.</p>
+          <a href="#" class="help-link">Read guide →</a>
+        </div>
+        <div class="help-card">
+          <div class="help-icon">💳</div>
+          <div class="help-title">Payments &amp; Billing</div>
+          <p class="help-desc">Questions about payments, refunds, and invoices? Find answers here.</p>
+          <a href="#" class="help-link">View billing help →</a>
+        </div>
+        <div class="help-card">
+          <div class="help-icon">🛒</div>
+          <div class="help-title">Cart &amp; Checkout</div>
+          <p class="help-desc">Having trouble with your cart or payment? Get help with checkout issues.</p>
+          <a href="#" class="help-link">Get cart help →</a>
+        </div>
+        <div class="help-card">
+          <div class="help-icon">✉️</div>
+          <div class="help-title">Contact Support</div>
+          <p class="help-desc">Can't find what you need? We respond within 24 hours.</p>
+          <a href="#" class="help-link">Contact us →</a>
+        </div>
+      </div>
+
+      <!-- FAQ -->
+      <div style="margin-top:32px;">
+        <span class="sec-tag">💬 FAQs</span>
+        <h3 style="font-family:var(--ff-head);font-size:1.2rem;font-weight:700;color:var(--tx);margin-bottom:4px;">Common Questions</h3>
+      </div>
+      <div class="faq-list">
+        <div class="faq-item">
+          <button class="faq-q" onclick="toggleFaq(this)">How do I add a course to my cart?<span class="faq-arrow">▼</span></button>
+          <div class="faq-a">Click "Browse All Courses", find a course you like, and click the <strong>"+ Cart"</strong> button. It's added instantly — no confirmation needed.</div>
+        </div>
+        <div class="faq-item">
+          <button class="faq-q" onclick="toggleFaq(this)">How do I access a course I purchased?<span class="faq-arrow">▼</span></button>
+          <div class="faq-a">After successful checkout, your purchased courses appear in <strong>My Courses</strong> above. Click "Continue" to open the lesson viewer.</div>
+        </div>
+        <div class="faq-item">
+          <button class="faq-q" onclick="toggleFaq(this)">Can I add the same course twice to my cart?<span class="faq-arrow">▼</span></button>
+          <div class="faq-a">No — CourseHub prevents duplicate enrollments. If a course is already in your cart or purchased, the "Add to Cart" button will show "Already in Cart" and be disabled.</div>
+        </div>
+        <div class="faq-item">
+          <button class="faq-q" onclick="toggleFaq(this)">What is your refund policy?<span class="faq-arrow">▼</span></button>
+          <div class="faq-a">We offer a <strong>7-day refund</strong> on all paid courses. Contact our support team within 7 days of purchase.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CTA STRIP -->
+    <div class="cta-strip">
+      <div class="cta-text">
+        <h3>Ready to learn something <span>new?</span></h3>
+        <p>Browse our full course catalogue and find your next skill to master.</p>
+      </div>
+      <div class="cta-btns">
+        <a href="/all-courses"><button class="btn-gold">Browse All Courses →</button></a>
+        <a href="/cart"><button class="btn-ghost">View My Cart 🛒</button></a>
+      </div>
+    </div>
+
+  </div>
+</main>
+
+<footer>
+  <div class="footer-inner">
+    <span>© 2026 <a href="/">CourseHub</a> — Built with Spring Boot &amp; Thymeleaf</span>
+    <span>
+      <a href="/all-courses">Browse</a> &nbsp;·&nbsp;
+      <a href="/cart">Cart</a> &nbsp;·&nbsp;
+      <a href="/student-profile">Profile</a>
+    </span>
+  </div>
+</footer>
+
+<script>
+  /* ═══════════════════════════════════════════════════════════
+     HAMBURGER MENU TOGGLE
+     Same pattern as index.html and public_courses.html
+  ═══════════════════════════════════════════════════════════ */
+  const menuToggle   = document.getElementById('menuToggle');
+  const menuDropdown = document.getElementById('menuDropdown');
+
+  menuToggle.addEventListener('click', function (e) {
+    e.stopPropagation();
+    menuDropdown.classList.toggle('open');
+  });
+  document.addEventListener('click', function () {
+    menuDropdown.classList.remove('open');
+  });
+  menuDropdown.addEventListener('click', function (e) { e.stopPropagation(); });
+
+  /* ═══════════════════════════════════════════════════════════
+     QUICK LINKS — active state on scroll
+  ═══════════════════════════════════════════════════════════ */
+  const sections = ['my-courses', 'features', 'recommended', 'certifications', 'help'];
+  const quickLinks = {};
+  sections.forEach(id => {
+    const el = document.querySelector('.quick-strip a[href="#' + id + '"]');
+    if (el) quickLinks[id] = el;
+  });
+  const obs = new IntersectionObserver(entries => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting && quickLinks[entry.target.id]) {
+        document.querySelectorAll('.quick-link').forEach(l => l.classList.remove('active'));
+        quickLinks[entry.target.id].classList.add('active');
+      }
+    });
+  }, { rootMargin: '-30% 0px -60% 0px' });
+  sections.forEach(id => { const el = document.getElementById(id); if (el) obs.observe(el); });
+
+  /* ═══════════════════════════════════════════════════════════
+     FAQ ACCORDION
+  ═══════════════════════════════════════════════════════════ */
+  function toggleFaq(btn) {
+    const item = btn.closest('.faq-item');
+    const isOpen = item.classList.contains('open');
+    document.querySelectorAll('.faq-item').forEach(i => i.classList.remove('open'));
+    if (!isOpen) item.classList.add('open');
+  }
+</script>
+
+</body>
+</html>

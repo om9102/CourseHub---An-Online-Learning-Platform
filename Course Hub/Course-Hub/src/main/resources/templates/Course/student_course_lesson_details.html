@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<!--
+╔══════════════════════════════════════════════════════════════════════════════╗
+║          student_course_lesson_details.html — COURSE DETAIL PAGE             ║
+╠══════════════════════════════════════════════════════════════════════════════╣
+║  URL:        GET /course/{courseId}   e.g. /course/JAVA101                   ║
+║  Controller: StudentController.courseDetail(courseId, session, model)         ║
+║  Returns:    "Course/student_course_lesson_details"                           ║
+║                                                                               ║
+║  MODEL ATTRIBUTES:                                                            ║
+║  ${course}              → single Course object fetched from DB               ║
+║  ${courseId}            → the courseId path variable                         ║
+║  ${cartCount}           → int for navbar cart badge                          ║
+║  ${topics}              → Map<String, List<Lesson>> lessons grouped by topic ║
+║                           OR just use course.lessons and group in Thymeleaf  ║
+║                                                                               ║
+║  THYMELEAF FIELDS:                                                            ║
+║  ${course.courseName}               → course name                            ║
+║  ${course.trainerName}              → trainer name (bold)                    ║
+║  ${course.courseShortDescription}   → description                            ║
+║  ${course.courseType}               → "free" or "paid"                       ║
+║  ${course.coursePrice}              → price string                            ║
+║  ${#lists.size(course.lessons)}     → total lesson count                     ║
+║  th:each="lesson : ${course.lessons}" → loop all lessons                     ║
+║  ${lesson.lessonId}                 → lesson ID (shown in Watch URL)         ║
+║  ${lesson.lessonName}               → lesson name                            ║
+║  ${lesson.lessonTopic}              → topic/chapter name                     ║
+║  ${lesson.lessonDescription}        → lesson description                     ║
+║  th:href="@{/lesson/{id}(id=${lesson.lessonId})}" → Watch button             ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+-->
+
+
+
+<!--
+╔══════════════════════════════════════════════════════════════════════════════╗
+║          student_course_lesson_details.html — COURSE DETAIL PAGE             ║
+╠══════════════════════════════════════════════════════════════════════════════╣
+║  URL:        GET /course/{courseId}   e.g. /course/JAVA101                   ║
+║  Controller: StudentController.courseDetail(courseId, session, model)         ║
+║  Returns:    "Course/student_course_lesson_details"                           ║
+║                                                                               ║
+║  MODEL ATTRIBUTES:                                                            ║
+║  ${course}              → single Course object fetched from DB               ║
+║  ${courseId}            → the courseId path variable                         ║
+║  ${cartCount}           → int for navbar cart badge                          ║
+║  ${topics}              → Map<String, List<Lesson>> lessons grouped by topic ║
+║                           OR just use course.lessons and group in Thymeleaf  ║
+║                                                                               ║
+║  THYMELEAF FIELDS:                                                            ║
+║  ${course.courseName}               → course name                            ║
+║  ${course.trainerName}              → trainer name (bold)                    ║
+║  ${course.courseShortDescription}   → description                            ║
+║  ${course.courseType}               → "free" or "paid"                       ║
+║  ${course.coursePrice}              → price string                            ║
+║  ${#lists.size(course.lessons)}     → total lesson count                     ║
+║  th:each="lesson : ${course.lessons}" → loop all lessons                     ║
+║  ${lesson.lessonId}                 → lesson ID (shown in Watch URL)         ║
+║  ${lesson.lessonName}               → lesson name                            ║
+║  ${lesson.lessonTopic}              → topic/chapter name                     ║
+║  ${lesson.lessonDescription}        → lesson description                     ║
+║  th:href="@{/lesson/{id}(id=${lesson.lessonId})}" → Watch button             ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+-->
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title th:text="${course.courseName} + ' — Course Hub'">Course Details — Course Hub</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&family=Playfair+Display:wght@700;800;900&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+      --midnight: #0c0e1a; --navy: #0f172a;
+      --blue-deep: #1e3a8a; --blue: #2563eb; --blue-lt: #3b82f6; --blue-soft: #eff6ff;
+      --gold: #f59e0b; --gold-pale: #fef3c7;
+      --bg: #f4f7ff; --card: #ffffff; --surface-2: #f8faff; --surface-3: #eef2ff;
+      --tx: #0f172a; --tx-2: #374151; --tx-3: #6b7280; --tx-4: #9ca3af;
+      --bd: #e5e7eb; --bd-2: #f0f2f9;
+      --green: #059669; --green-bg: #ecfdf5; --red: #dc2626;
+      --sh-sm: 0 1px 4px rgba(15,23,42,.05); --sh-md: 0 4px 16px rgba(30,58,138,.08);
+      --sh-lg: 0 12px 36px rgba(30,58,138,.13); --sh-xl: 0 24px 64px rgba(30,58,138,.18);
+      --ff-head: 'Playfair Display', Georgia, serif;
+      --ff-body: 'DM Sans', system-ui, sans-serif;
+      --r-sm: 8px; --r: 12px; --r-lg: 18px; --r-xl: 24px; --rl: 18px;
+      --ease: .2s cubic-bezier(.4,0,.2,1);
+    }
+    body { font-family: var(--ff-body); background: var(--bg); color: var(--tx); font-size: 15px; line-height: 1.6; }
+    a { text-decoration: none; color: inherit; }
+    ul { list-style: none; }
+
+    /* NAVBAR */
+    .navbar { background: var(--midnight); position: sticky; top: 0; z-index: 500; box-shadow: 0 1px 0 rgba(255,255,255,.05), 0 4px 20px rgba(0,0,0,.3); }
+    .nav-inner { max-width: 1240px; margin: 0 auto; padding: 0 28px; height: 66px; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+    .nav-logo { display: flex; align-items: center; gap: 9px; font-family: var(--ff-head); font-size: 1.45rem; font-weight: 900; color: #fff; letter-spacing: -.03em; flex-shrink: 0; }
+    .logo-mark { width: 32px; height: 32px; background: var(--gold); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: .9rem; }
+    .nav-right { display: flex; align-items: center; gap: 10px; }
+    .nav-badge { background: rgba(245,158,11,.18); color: var(--gold); font-size: .71rem; font-weight: 700; padding: 3px 10px; border-radius: 20px; border: 1px solid rgba(245,158,11,.3); }
+    .nav-name { font-size: .83rem; color: rgba(255,255,255,.72); font-weight: 500; }
+    .cart-wrap { position: relative; }
+    .btn-cart { display: flex; align-items: center; gap: 6px; padding: 8px 16px; font-family: var(--ff-body); font-size: .84rem; font-weight: 600; color: #fff; background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.2); border-radius: var(--r-sm); cursor: pointer; transition: all var(--ease); }
+    .cart-badge { position: absolute; top: -6px; right: -6px; background: var(--red); color: #fff; font-size: .62rem; font-weight: 800; width: 18px; height: 18px; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+    .btn-nav-ghost { padding: 8px 16px; font-family: var(--ff-body); font-size: .84rem; font-weight: 600; color: rgba(255,255,255,.8); background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.15); border-radius: var(--r-sm); cursor: pointer; transition: all var(--ease); }
+    .btn-nav-ghost:hover { background: rgba(255,255,255,.16); color: #fff; }
+    .btn-logout { padding: 8px 16px; font-family: var(--ff-body); font-size: .84rem; font-weight: 700; color: var(--midnight); background: var(--gold); border: none; border-radius: var(--r-sm); cursor: pointer; }
+
+    /* HERO BANNER */
+    .course-hero { background: var(--midnight); background-image: radial-gradient(ellipse 80% 70% at 65% 50%, rgba(37,99,235,.28) 0%, transparent 60%), radial-gradient(ellipse 40% 50% at 5% 80%, rgba(245,158,11,.12) 0%, transparent 50%); padding: 52px 0 44px; color: #fff; position: relative; overflow: hidden; }
+    .course-hero::before { content: ''; position: absolute; inset: 0; background-image: radial-gradient(circle, rgba(255,255,255,.04) 1px, transparent 1px); background-size: 28px 28px; pointer-events: none; }
+    .container { max-width: 1240px; margin: 0 auto; padding: 0 28px; position: relative; z-index: 1; }
+    .breadcrumb { display: flex; align-items: center; gap: 8px; font-size: .78rem; color: rgba(255,255,255,.45); margin-bottom: 22px; flex-wrap: wrap; }
+    .breadcrumb a { color: rgba(255,255,255,.7); font-weight: 500; transition: color var(--ease); }
+    .breadcrumb a:hover { color: #fff; }
+
+    .hero-grid { display: grid; grid-template-columns: 1fr 300px; gap: 36px; align-items: start; }
+
+    /* Left: course info */
+    .type-pill { display: inline-block; font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; padding: 4px 14px; border-radius: 20px; margin-bottom: 14px; }
+    .pill-paid { background: rgba(255,255,255,.18); color: #fff; }
+    .pill-free { background: var(--green-bg); color: var(--green); }
+    .course-name-h1 { font-family: var(--ff-head); font-size: 2rem; font-weight: 900; line-height: 1.2; margin-bottom: 12px; }
+    .course-desc-hero { font-size: .93rem; color: rgba(255,255,255,.72); max-width: 520px; line-height: 1.78; margin-bottom: 18px; }
+    .meta-row { display: flex; gap: 20px; flex-wrap: wrap; }
+    .meta-item { display: flex; align-items: center; gap: 6px; font-size: .84rem; color: rgba(255,255,255,.82); font-weight: 500; }
+
+    /* Right: info card */
+    .info-card { background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.14); border-radius: var(--r-xl); padding: 24px; backdrop-filter: blur(10px); }
+    .info-price { font-family: var(--ff-head); font-size: 2rem; font-weight: 900; margin-bottom: 4px; }
+    .ip-paid { color: #fff; }
+    .ip-free { color: #6ee7b7; }
+    .info-label { font-size: .78rem; color: rgba(255,255,255,.55); margin-bottom: 20px; }
+    .info-includes h4 { font-size: .82rem; font-weight: 700; color: rgba(255,255,255,.8); margin-bottom: 12px; }
+    .include-item { display: flex; align-items: center; gap: 9px; font-size: .8rem; color: rgba(255,255,255,.7); margin-bottom: 8px; }
+
+    /* MAIN CONTENT */
+    .main { padding: 48px 0 80px; }
+    .page-layout { display: grid; grid-template-columns: 1fr 300px; gap: 28px; align-items: start; }
+
+    /* LESSONS SECTION */
+    .lessons-section { }
+    .section-heading { font-family: var(--ff-head); font-size: 1.4rem; font-weight: 700; color: var(--tx); margin-bottom: 6px; }
+    .section-sub { font-size: .86rem; color: var(--tx-3); margin-bottom: 24px; }
+
+    /*
+      TOPIC GROUP — lessons are grouped by topic/chapter
+      Each topic name gets its own header block, then lessons underneath
+
+      HOW GROUPING WORKS IN THYMELEAF:
+      Thymeleaf doesn't have a built-in groupBy. The controller passes
+      a Map<String, List<Lesson>> topics where key = lessonTopic.
+      Then Thymeleaf loops: th:each="entry : ${topics}"
+        entry.key   = topic name e.g. "Getting Started"
+        entry.value = List<Lesson> with that topic
+    */
+    .topic-group { margin-bottom: 28px; }
+
+    .topic-header {
+      display: flex; align-items: center; gap: 12px;
+      padding: 14px 20px; background: var(--midnight);
+      border-radius: var(--r-lg) var(--r-lg) 0 0;
+      position: relative; overflow: hidden;
+    }
+    .topic-header::before { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, rgba(37,99,235,.4) 0%, transparent 70%); }
+    .topic-icon { font-size: 1.1rem; position: relative; z-index: 1; }
+    .topic-name { font-family: var(--ff-head); font-size: .95rem; font-weight: 700; color: #fff; position: relative; z-index: 1; }
+    .topic-count { background: rgba(255,255,255,.15); color: rgba(255,255,255,.8); font-size: .67rem; font-weight: 700; padding: 2px 9px; border-radius: 20px; margin-left: auto; position: relative; z-index: 1; }
+
+    /* Lesson rows inside topic */
+    .lessons-list { background: var(--card); border: 1px solid var(--bd-2); border-radius: 0 0 var(--r-lg) var(--r-lg); overflow: hidden; box-shadow: var(--sh-sm); }
+
+    .lesson-row {
+      display: grid; grid-template-columns: 44px 1fr auto;
+      align-items: flex-start; gap: 16px; padding: 18px 22px;
+      border-top: 1px solid var(--bd-2); transition: background var(--ease);
+      animation: lessonIn .35s ease both;
+    }
+    @keyframes lessonIn { from{opacity:0;transform:translateX(-6px)} to{opacity:1;transform:translateX(0)} }
+    .lesson-row:hover { background: var(--surface-2); }
+    .lesson-row:first-child { border-top: none; }
+
+    .lesson-num { width: 38px; height: 38px; border-radius: 10px; flex-shrink: 0; background: var(--blue-soft); color: var(--blue-deep); font-size: .82rem; font-weight: 700; display: flex; align-items: center; justify-content: center; transition: all var(--ease); }
+    .lesson-row:hover .lesson-num { background: var(--blue-deep); color: #fff; }
+
+    .lesson-info { min-width: 0; }
+    .lesson-name { font-size: .91rem; font-weight: 700; color: var(--tx); margin-bottom: 3px; }
+    .lesson-desc { font-size: .78rem; color: var(--tx-3); line-height: 1.6; }
+
+    .lesson-right { display: flex; flex-direction: column; align-items: flex-end; gap: 7px; flex-shrink: 0; }
+    .lesson-id { font-size: .67rem; color: var(--tx-4); background: var(--surface-2); border: 1px solid var(--bd); padding: 2px 8px; border-radius: 10px; }
+
+    /*
+      WATCH BUTTON
+      THYMELEAF: th:href="@{/lesson/{id}(id=${lesson.lessonId})}"
+      → Navigates to student_my_lessons.html
+      → Shows video player + lesson details + comment section
+    */
+    .btn-watch {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 8px 16px; font-family: var(--ff-body); font-size: .79rem; font-weight: 700;
+      color: #fff; background: var(--blue-deep); border: none;
+      border-radius: var(--r-sm); cursor: pointer; transition: all var(--ease); white-space: nowrap;
+    }
+    .btn-watch:hover { background: var(--blue); transform: translateX(2px); }
+    .btn-watch.free { background: var(--green); }
+    .btn-watch.free:hover { background: #047857; }
+    .no-video { font-size: .72rem; color: var(--tx-4); font-style: italic; }
+
+    /* EMPTY LESSONS */
+    .no-lessons { padding: 28px; text-align: center; font-size: .86rem; color: var(--tx-3); border-top: 1px solid var(--bd); }
+
+    /* SIDEBAR */
+    .sidebar { position: sticky; top: 84px; }
+    .sidebar-card { background: var(--card); border: 1px solid var(--bd-2); border-radius: var(--r-xl); padding: 22px; box-shadow: var(--sh-sm); margin-bottom: 18px; }
+    .sidebar-card h3 { font-family: var(--ff-head); font-size: .95rem; font-weight: 700; color: var(--blue-deep); margin-bottom: 14px; }
+    .sidebar-stat { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--bd-2); font-size: .84rem; }
+    .sidebar-stat:last-child { border-bottom: none; }
+    .stat-icon { width: 34px; height: 34px; border-radius: 9px; display: flex; align-items: center; justify-content: center; font-size: .95rem; flex-shrink: 0; }
+    .si-blue { background: var(--blue-soft); } .si-green { background: var(--green-bg); } .si-gold { background: var(--gold-pale); }
+    .stat-val { font-weight: 700; color: var(--tx); }
+    .stat-lbl { font-size: .72rem; color: var(--tx-3); }
+
+    /* Back nav */
+    .back-nav { margin-top: 28px; display: flex; gap: 12px; flex-wrap: wrap; }
+    .btn-back-link { padding: 9px 18px; font-family: var(--ff-body); font-size: .84rem; font-weight: 600; color: var(--blue-deep); background: var(--blue-soft); border: 1.5px solid #bfdbfe; border-radius: var(--r-sm); cursor: pointer; transition: all var(--ease); }
+    .btn-back-link:hover { background: var(--blue-deep); color: #fff; border-color: var(--blue-deep); }
+
+    /* FOOTER */
+    footer { background: var(--navy); color: rgba(255,255,255,.4); padding: 28px 0; }
+    .footer-inner { max-width: 1240px; margin: 0 auto; padding: 0 28px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; font-size: .82rem; }
+    footer a { color: var(--gold); }
+
+    /* RESPONSIVE */
+    @media (max-width: 900px) { .hero-grid, .page-layout { grid-template-columns: 1fr; } .info-card { display: none; } .sidebar { position: static; } }
+    @media (max-width: 600px) { .lesson-row { grid-template-columns: 36px 1fr; } .lesson-right { display: none; } .nav-inner, .container { padding: 0 18px; } .course-name-h1 { font-size: 1.5rem; } }
+  </style>
+</head>
+<body>
+
+<!-- NAVBAR -->
+<nav class="navbar">
+  <div class="nav-inner">
+    <a href="/student-home" class="nav-logo"><div class="logo-mark">📚</div>CourseHub</a>
+    <div class="nav-right">
+      <span class="nav-badge">🎓 Student</span>
+      <span class="nav-name" th:text="${session.user.firstname}">Om</span>
+      <a href="/my-courses"><button class="btn-nav-ghost">← My Courses</button></a>
+      <div class="cart-wrap">
+        <a href="/cart"><button class="btn-cart">🛒 Cart</button></a>
+        <span class="cart-badge" th:if="${cartCount != null and cartCount > 0}" th:text="${cartCount}">0</span>
+      </div>
+      <a href="/logout"><button class="btn-logout">Logout</button></a>
+    </div>
+  </div>
+</nav>
+
+<!-- COURSE HERO -->
+<div class="course-hero">
+  <div class="container">
+
+    <nav class="breadcrumb">
+      <a href="/student-home">Dashboard</a>
+      <span>›</span>
+      <a href="/my-courses">My Courses</a>
+      <span>›</span>
+      <!-- th:text="${course.courseName}" -->
+      <span th:text="${course.courseName}">Course Name</span>
+    </nav>
+
+    <div class="hero-grid">
+      <div>
+        <!-- Type pill -->
+        <span class="type-pill pill-paid" th:if="${course.courseType != 'free'}">💰 Paid Course</span>
+        <span class="type-pill pill-free" th:if="${course.courseType == 'free'}">🆓 Free Course</span>
+
+        <!-- Course name: th:text="${course.courseName}" -->
+        <h1 class="course-name-h1" th:text="${course.courseName}">Spring Boot for Beginners</h1>
+
+        <!-- Description: th:text="${course.courseShortDescription}" -->
+        <p class="course-desc-hero" th:text="${course.courseShortDescription}">Build production-ready REST APIs using Spring Boot, JPA, and MySQL from scratch.</p>
+
+        <div class="meta-row">
+          <!-- th:text="'👨‍💻 ' + ${course.trainerName}" -->
+          <div class="meta-item" th:text="'👨‍💻 ' + ${course.trainerName}">👨‍💻 Trainer</div>
+          <!-- th:text="'📚 ' + ${#lists.size(course.lessons)} + ' Lessons'" -->
+          <div class="meta-item" th:text="'📚 ' + ${#lists.size(course.lessons)} + ' Lessons'">📚 0 Lessons</div>
+          <div class="meta-item">♾️ Lifetime Access</div>
+        </div>
+      </div>
+
+      <!-- Info card (desktop only) -->
+      <div class="info-card">
+        <div class="info-price ip-paid" th:if="${course.courseType != 'free'}" th:text="'₹' + ${course.coursePrice}">₹999</div>
+        <div class="info-price ip-free" th:if="${course.courseType == 'free'}">Free</div>
+        <div class="info-label">One-time payment · Lifetime access</div>
+        <div class="info-includes">
+          <h4>This course includes:</h4>
+          <div class="include-item">📹 <span th:text="${#lists.size(course.lessons)} + ' video lessons'">0 video lessons</span></div>
+          <div class="include-item">📄 <span>Downloadable study notes</span></div>
+          <div class="include-item">🏆 <span>Certificate of completion</span></div>
+          <div class="include-item">♾️ <span>Lifetime access</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MAIN -->
+<main class="main">
+  <div class="container">
+    <div class="page-layout">
+
+      <!-- LEFT: Lessons grouped by topic -->
+      <div class="lessons-section">
+        <h2 class="section-heading">📖 Course Lessons</h2>
+        <p class="section-sub">Lessons are grouped by topic. Click "Watch" on any lesson to open the video player.</p>
+
+        <!--
+          EMPTY LESSONS STATE
+          th:if="${#lists.isEmpty(course.lessons)}"
+        -->
+        <div style="text-align:center;padding:48px;background:var(--card);border:2px dashed var(--bd);border-radius:var(--r-xl);" th:if="${#lists.isEmpty(course.lessons)}">
+          <div style="font-size:2.5rem;margin-bottom:14px;">📭</div>
+          <h3 style="font-family:var(--ff-head);color:var(--tx);margin-bottom:8px;">No Lessons Yet</h3>
+          <p style="color:var(--tx-3);font-size:.88rem;">The trainer hasn't uploaded any lessons yet. Check back soon.</p>
+        </div>
+
+        <!--
+          LESSONS GROUPED BY TOPIC
+          ══════════════════════════════════════════════════════════════
+          HOW GROUPING WORKS:
+          Controller puts Map<String, List<Lesson>> in model as "topics".
+          Key   = lessonTopic  (e.g. "Getting Started")
+          Value = List<Lesson> (all lessons with that topic)
+
+          THYMELEAF:
+            th:each="entry : ${topics}"
+              entry.key   → topic name
+              entry.value → List<Lesson> for this topic
+
+          INSIDE INNER LOOP:
+            th:each="lesson : ${entry.value}"
+              lesson.lessonId
+              lesson.lessonName
+              lesson.lessonDescription
+              lesson.lessonVideoLink
+          ══════════════════════════════════════════════════════════════
+        -->
+        <div th:unless="${#lists.isEmpty(course.lessons)}">
+
+          <!--
+            TOPIC GROUP LOOP
+            THYMELEAF: th:each="entry : ${topics}"
+          -->
+          <div class="topic-group" th:each="entry : ${topics}">
+
+            <!-- Topic header row -->
+            <div class="topic-header">
+              <span class="topic-icon">📌</span>
+              <!--
+                Topic name: th:text="${entry.key}"
+                e.g. "Getting Started", "Core Concepts", "REST & HTTP"
+              -->
+              <span class="topic-name" th:text="${entry.key}">Topic Name</span>
+              <!--
+                Lesson count for this topic: th:text="${#lists.size(entry.value)} + ' lessons'"
+              -->
+              <span class="topic-count" th:text="${#lists.size(entry.value)} + ' lessons'">0 lessons</span>
+            </div>
+
+            <!-- Lessons list for this topic -->
+            <div class="lessons-list">
+
+              <!--
+                LESSON ROW LOOP
+                THYMELEAF: th:each="lesson, lIter : ${entry.value}"
+              -->
+              <div class="lesson-row"
+                   th:each="lesson, lIter : ${entry.value}"
+                   th:style="'animation-delay:' + ${lIter.index * 40} + 'ms'">
+
+                <!-- Lesson number badge: th:text="${lesson.lessonId}" -->
+                <div class="lesson-num" th:text="${lesson.lessonId}">1</div>
+
+                <div class="lesson-info">
+                  <!-- Lesson name: th:text="${lesson.lessonName}" -->
+                  <div class="lesson-name" th:text="${lesson.lessonName}">Lesson Name</div>
+                  <!-- Description: th:text="${lesson.lessonDescription}" -->
+                  <div class="lesson-desc" th:text="${lesson.lessonDescription}">Lesson description here</div>
+                </div>
+
+                <div class="lesson-right">
+                  <span class="lesson-id" th:text="'#' + ${lesson.lessonId}">L#1</span>
+
+                  <!--
+                    WATCH BUTTON — fixed URL includes BOTH courseId AND lessonId
+                    OLD (broken): /lesson/{lessonId}
+                      → ambiguous when multiple courses have Lesson #1
+                    NEW (fixed):  /lesson/{courseId}/{lessonId}
+                      → uniquely identifies the exact lesson
+
+                    th:href="@{/lesson/{cid}/{lid}(cid=${course.courseId},lid=${lesson.lessonId})}"
+                    generates URLs like: /lesson/JAVA101/1, /lesson/PY201/2, etc.
+                  -->
+                  <a th:href="@{/lesson/{cid}/{lid}(cid=${course.courseId},lid=${lesson.lessonId})}"
+                     th:if="${lesson.lessonVideoLink != null and !lesson.lessonVideoLink.isEmpty()}">
+                    <button class="btn-watch"
+                            th:classappend="${course.courseType == 'free'} ? 'free' : ''">
+                      ▶ Watch
+                    </button>
+                  </a>
+
+                  <!-- No video fallback -->
+                  <span class="no-video"
+                        th:unless="${lesson.lessonVideoLink != null and !lesson.lessonVideoLink.isEmpty()}">
+                    Coming soon
+                  </span>
+                </div>
+
+              </div><!-- /lesson-row -->
+
+            </div><!-- /lessons-list -->
+
+          </div><!-- /topic-group -->
+
+        </div><!-- /topics wrapper -->
+
+        <!-- Back navigation -->
+        <div class="back-nav">
+          <a href="/my-courses"><button class="btn-back-link">← Back to My Courses</button></a>
+          <a href="/student-home"><button class="btn-back-link">🏠 Dashboard</button></a>
+        </div>
+      </div><!-- /lessons-section -->
+
+      <!-- RIGHT: Sidebar -->
+      <div class="sidebar">
+        <div class="sidebar-card">
+          <h3>📊 Course Overview</h3>
+          <div class="sidebar-stat">
+            <div class="stat-icon si-blue">📚</div>
+            <div>
+              <div class="stat-val" th:text="${#lists.size(course.lessons)}">0</div>
+              <div class="stat-lbl">Total Lessons</div>
+            </div>
+          </div>
+          <div class="sidebar-stat">
+            <div class="stat-icon si-gold">📌</div>
+            <div>
+              <!--
+                Topic count: controller puts ${topicCount} in model
+                It's the size of the topics map: topics.size()
+              -->
+              <div class="stat-val" th:text="${topicCount}">0</div>
+              <div class="stat-lbl">Topics / Chapters</div>
+            </div>
+          </div>
+          <div class="sidebar-stat">
+            <div class="stat-icon si-green">🏆</div>
+            <div>
+              <div class="stat-val">Free</div>
+              <div class="stat-lbl">Certificate on Completion</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="sidebar-card">
+          <h3>✅ Enrolled</h3>
+          <div style="font-size:.84rem;color:var(--tx-3);line-height:1.7;">
+            You have full lifetime access to all lessons in this course. Watch at your own pace, as many times as you like.
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /page-layout -->
+  </div>
+</main>
+
+<footer>
+  <div class="footer-inner">
+    <span>© 2026 <a href="/">CourseHub</a> — Spring Boot &amp; Thymeleaf</span>
+    <span><a href="/my-courses">My Courses</a> &nbsp;·&nbsp; <a href="/student-home">Dashboard</a></span>
+  </div>
+</footer>
+
+</body>
+</html>

@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<!--
+╔══════════════════════════════════════════════════════════════════════════╗
+║               course-details.html — SINGLE COURSE PAGE                  ║
+╠══════════════════════════════════════════════════════════════════════════╣
+║                                                                          ║
+║  HOW THIS PAGE WORKS                                                    ║
+║  ──────────────────                                                      ║
+║  URL: /course-details/{courseId}  e.g. /course-details/JAVA101          ║
+║                                                                          ║
+║  1. Student clicks "View Details" on any course card                    ║
+║  2. Browser sends GET /course-details/JAVA101                           ║
+║  3. CourseDetailsController handles it                                  ║
+║  4. Fetches the specific course by ID from DB                           ║
+║  5. Fetches all other courses for "Recommended" section                 ║
+║  6. Puts both in Model and renders this page                            ║
+║                                                                          ║
+║  BACKEND CODE — CourseDetailsController.java                            ║
+║  ─────────────────────────────────────────                               ║
+║                                                                          ║
+║  package com.example.Course.Hub.Controller;                              ║
+║                                                                          ║
+║  import com.example.Course.Hub.ENTITY.Course;                           ║
+║  import com.example.Course.Hub.SERVICES.Trainer.TrainerService;          ║
+║  import jakarta.servlet.http.HttpSession;                                ║
+║  import org.springframework.beans.factory.annotation.Autowired;          ║
+║  import org.springframework.stereotype.Controller;                       ║
+║  import org.springframework.ui.Model;                                    ║
+║  import org.springframework.web.bind.annotation.GetMapping;              ║
+║  import org.springframework.web.bind.annotation.PathVariable;            ║
+║  import java.util.List;                                                  ║
+║  import java.util.stream.Collectors;                                     ║
+║                                                                          ║
+║  @Controller                                                             ║
+║  public class CourseDetailsController {                                  ║
+║                                                                          ║
+║      @Autowired                                                          ║
+║      TrainerService tService;                                            ║
+║                                                                          ║
+║      @GetMapping("/course-details/{courseId}")                           ║
+║      public String courseDetails(                                        ║
+║              @PathVariable("courseId") String courseId,                 ║
+║              HttpSession session,                                        ║
+║              Model model) {                                              ║
+║                                                                          ║
+║          // 1. Fetch the specific course                                 ║
+║          Course course = tService.getCourse(courseId);                  ║
+║                                                                          ║
+║          // 2. Fetch all courses and filter out the current one          ║
+║          //    for "Recommended" section (show max 4)                   ║
+║          List<Course> all = tService.getAllCourses();                    ║
+║          List<Course> recommended = all.stream()                        ║
+║              .filter(c -> !c.getCourseId().equals(courseId))            ║
+║              .limit(4)                                                   ║
+║              .collect(Collectors.toList());                              ║
+║                                                                          ║
+║          // 3. Cart count for navbar badge                               ║
+║          Object cart = session.getAttribute("cart");                    ║
+║          int cartCount = (cart instanceof List) ?                        ║
+║                          ((List) cart).size() : 0;                      ║
+║                                                                          ║
+║          // 4. Put everything in Model                                   ║
+║          model.addAttribute("course", course);                          ║
+║          model.addAttribute("recommended", recommended);                ║
+║          model.addAttribute("cartCount", cartCount);                    ║
+║                                                                          ║
+║          return "Home/course_Details";                                   ║
+║      }                                                                   ║
+║  }                                                                       ║
+║                                                                          ║
+║  FILE LOCATION: templates/Home/course_Details.html                      ║
+║                                                                          ║
+╠══════════════════════════════════════════════════════════════════════════╣
+║  THYMELEAF FIELDS IN THIS PAGE                                           ║
+║  ──────────────────────────────                                          ║
+║  ${course.courseId}              → unique ID e.g. "JAVA101"             ║
+║  ${course.courseName}            → full course name                     ║
+║  ${course.courseShortDescription}→ description text                     ║
+║  ${course.trainerName}           → trainer's name                       ║
+║  ${course.coursePrice}           → price string e.g. "999"              ║
+║  ${course.courseType}            → "free" or "paid"                     ║
+║  ${#lists.size(course.lessons)}  → total lesson count                   ║
+║  th:each="lesson : ${course.lessons}" → loop all lessons                ║
+║  ${lesson.lessonName}            → lesson name                          ║
+║  ${lesson.lessonTopic}           → lesson topic/chapter                 ║
+║  ${lesson.lessonDescription}     → lesson description                   ║
+║  th:each="c : ${recommended}"   → recommended courses loop              ║
+╚══════════════════════════════════════════════════════════════════════════╝
+-->
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- THYMELEAF: th:text="${course.courseName} + ' — Course Hub'" -->
+  <title>Course Details — Course Hub</title>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+      --navy: #1a237e; --blue: #1565c0; --sky: #90caf9;
+      --bg: #f4f6fb; --text: #1e293b; --muted: #64748b;
+      --border: #e2e8f0; --green: #2e7d32; --green-light: #e8f5e9;
+      --red: #dc2626;
+      --card-shadow: 0 4px 20px rgba(26,35,126,.08);
+      --card-shadow-hover: 0 8px 32px rgba(26,35,126,.14);
+    }
+    body { font-family: 'Poppins', sans-serif; background: var(--bg); color: var(--text); font-size: 15px; line-height: 1.6; }
+    a { text-decoration: none; color: inherit; }
+    ul { list-style: none; }
+
+    /* NAVBAR */
+    .navbar { background: var(--navy); position: sticky; top: 0; z-index: 200; box-shadow: 0 2px 12px rgba(0,0,0,.18); }
+    .nav-inner { max-width: 1200px; margin: 0 auto; padding: 0 28px; height: 64px; display: flex; align-items: center; justify-content: space-between; }
+    .nav-logo  { font-size: 1.4rem; font-weight: 800; color: #fff; letter-spacing: -.5px; }
+    .nav-logo span { color: var(--sky); }
+    .nav-right { display: flex; align-items: center; gap: 10px; }
+    .nav-badge { background: rgba(255,255,255,.12); color: var(--sky); font-size: .76rem; font-weight: 600; padding: 4px 11px; border-radius: 20px; }
+    .nav-name  { font-size: .82rem; color: rgba(255,255,255,.75); font-weight: 500; }
+    .btn-nav-ghost { padding: 7px 15px; font-family: 'Poppins', sans-serif; font-size: .82rem; font-weight: 600; background: rgba(255,255,255,.12); color: #fff; border: 1.5px solid rgba(255,255,255,.28); border-radius: 7px; cursor: pointer; }
+    .btn-logout { padding: 7px 17px; font-family: 'Poppins', sans-serif; font-size: .83rem; font-weight: 600; color: var(--navy); background: #fff; border: none; border-radius: 7px; cursor: pointer; }
+    .cart-btn-wrap { position: relative; }
+    .btn-cart { padding: 7px 14px; font-family: 'Poppins', sans-serif; font-size: .82rem; font-weight: 600; background: rgba(255,255,255,.12); color: #fff; border: 1.5px solid rgba(255,255,255,.28); border-radius: 7px; cursor: pointer; }
+    .cart-count { background: var(--red); color: #fff; font-size: .65rem; font-weight: 800; width: 17px; height: 17px; border-radius: 50%; display: flex; align-items: center; justify-content: center; position: absolute; top: -6px; right: -6px; }
+
+    /* HERO BANNER */
+    .course-hero { background: linear-gradient(135deg, var(--navy) 0%, var(--blue) 100%); padding: 44px 0 36px; color: #fff; }
+    .container { max-width: 1200px; margin: 0 auto; padding: 0 28px; }
+    .breadcrumb { display: flex; align-items: center; gap: 8px; font-size: .8rem; color: rgba(255,255,255,.55); padding-bottom: 20px; }
+    .breadcrumb a { color: rgba(255,255,255,.8); font-weight: 500; }
+    .breadcrumb a:hover { color: #fff; }
+    .course-hero-inner { display: grid; grid-template-columns: 1fr 320px; gap: 32px; align-items: start; }
+
+    /* Left: course info */
+    .course-type-pill { display: inline-block; font-size: .72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; padding: 4px 14px; border-radius: 20px; margin-bottom: 14px; }
+    .pill-paid { background: rgba(255,255,255,.2); color: #fff; }
+    .pill-free { background: var(--green-light); color: var(--green); }
+    .course-hero-title { font-size: 1.9rem; font-weight: 800; line-height: 1.22; margin-bottom: 12px; }
+    .course-hero-desc  { font-size: .93rem; color: rgba(255,255,255,.75); line-height: 1.75; margin-bottom: 18px; max-width: 520px; }
+    .course-meta-row { display: flex; gap: 20px; flex-wrap: wrap; }
+    .course-meta-item { display: flex; align-items: center; gap: 6px; font-size: .84rem; color: rgba(255,255,255,.82); }
+
+    /* Right: sticky action card */
+    .action-card { background: #fff; border-radius: 16px; padding: 26px 24px; box-shadow: 0 8px 32px rgba(0,0,0,.2); }
+    .action-price      { font-size: 2rem; font-weight: 800; color: var(--navy); margin-bottom: 4px; }
+    .action-price-free { font-size: 2rem; font-weight: 800; color: var(--green); margin-bottom: 4px; }
+    .action-label { font-size: .78rem; color: var(--muted); margin-bottom: 20px; }
+
+    .btn-add-cart-large {
+      width: 100%; padding: 13px; background: transparent; color: var(--navy);
+      font-family: 'Poppins', sans-serif; font-size: .95rem; font-weight: 700;
+      border: 2px solid var(--navy); border-radius: 10px; cursor: pointer;
+      margin-bottom: 10px; transition: all .2s;
+    }
+    .btn-add-cart-large:hover { background: var(--navy); color: #fff; }
+
+    /*
+      THYMELEAF: th:href="@{/cart/add(courseId=${course.courseId})}"
+    */
+    .btn-enroll-large {
+      width: 100%; padding: 13px; background: var(--navy); color: #fff;
+      font-family: 'Poppins', sans-serif; font-size: .95rem; font-weight: 700;
+      border: none; border-radius: 10px; cursor: pointer;
+      margin-bottom: 18px; transition: background .2s; display: block; text-align: center;
+    }
+    .btn-enroll-large:hover { background: var(--blue); }
+
+    .action-includes { border-top: 1px solid var(--border); padding-top: 16px; }
+    .action-includes h4 { font-size: .82rem; font-weight: 700; color: var(--text); margin-bottom: 10px; }
+    .include-item { display: flex; align-items: center; gap: 8px; font-size: .8rem; color: var(--muted); margin-bottom: 7px; }
+
+    /* MAIN */
+    .main { padding: 40px 0 64px; }
+    .page-layout { display: grid; grid-template-columns: 1fr 320px; gap: 28px; align-items: start; }
+
+    /* LESSONS SECTION */
+    .lessons-card { background: #fff; border: 1px solid var(--border); border-radius: 16px; box-shadow: var(--card-shadow); overflow: hidden; }
+    .lessons-header { padding: 18px 24px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+    .lessons-header h2 { font-size: 1rem; font-weight: 700; }
+    .lesson-count-badge { background: var(--navy); color: #fff; font-size: .72rem; font-weight: 700; padding: 3px 10px; border-radius: 20px; }
+
+    .lesson-row {
+      display: flex; align-items: flex-start; gap: 14px; padding: 14px 22px;
+      border-bottom: 1px solid var(--border); transition: background .15s;
+    }
+    .lesson-row:hover { background: var(--bg); }
+    .lesson-row:last-child { border-bottom: none; }
+    .lesson-num { width: 30px; height: 30px; border-radius: 7px; background: #e3f2fd; color: var(--blue); font-size: .78rem; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 2px; }
+    .lesson-info { flex: 1; }
+    .lesson-name  { font-size: .88rem; font-weight: 700; color: var(--text); margin-bottom: 2px; }
+    .lesson-topic { font-size: .75rem; font-weight: 600; color: var(--blue); margin-bottom: 3px; }
+    .lesson-desc  { font-size: .77rem; color: var(--muted); line-height: 1.55; }
+    .lesson-locked { font-size: .72rem; color: #b0bec5; font-style: italic; margin-top: 3px; }
+
+    /* SIDE STICKY (action card on scroll) */
+    .side-sticky { position: sticky; top: 84px; }
+
+    /* WHAT YOU LEARN */
+    .learn-card { background: #fff; border: 1px solid var(--border); border-radius: 14px; padding: 22px; box-shadow: var(--card-shadow); margin-bottom: 20px; }
+    .learn-card h3 { font-size: .95rem; font-weight: 700; color: var(--navy); margin-bottom: 14px; }
+    .learn-item { display: flex; align-items: flex-start; gap: 8px; font-size: .82rem; color: var(--muted); margin-bottom: 8px; line-height: 1.5; }
+    .learn-check { color: var(--green); font-weight: 700; flex-shrink: 0; margin-top: 2px; }
+
+    /* SECTION HELPERS */
+    .section-tag   { font-size: .7rem; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; color: var(--blue); display: block; margin-bottom: 5px; }
+    .section-title { font-size: 1.2rem; font-weight: 700; color: var(--text); margin-bottom: 18px; }
+    .mt-section { margin-top: 44px; }
+
+    /* RECOMMENDED COMPACT GRID */
+    .rec-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
+    .rec-card { background: #fff; border: 1px solid var(--border); border-radius: 12px; display: flex; align-items: center; gap: 14px; padding: 13px 15px; box-shadow: var(--card-shadow); transition: box-shadow .22s, transform .18s; }
+    .rec-card:hover { box-shadow: var(--card-shadow-hover); transform: translateY(-2px); }
+    .rec-icon { width: 48px; height: 48px; border-radius: 9px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 1.4rem; }
+    .ci-1 { background: linear-gradient(135deg,#bbdefb,#90caf9); }
+    .ci-2 { background: linear-gradient(135deg,#e8eaf6,#c5cae9); }
+    .ci-3 { background: linear-gradient(135deg,#b2dfdb,#80cbc4); }
+    .ci-4 { background: linear-gradient(135deg,#ffe0b2,#ffcc80); }
+    .ci-5 { background: linear-gradient(135deg,#fce4ec,#f8bbd0); }
+    .ci-6 { background: linear-gradient(135deg,#c8e6c9,#a5d6a7); }
+    .rec-info { flex: 1; min-width: 0; }
+    .rec-name    { font-size: .85rem; font-weight: 700; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 2px; }
+    .rec-trainer { font-size: .73rem; color: var(--muted); }
+    .rec-right { flex-shrink: 0; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+    .rec-price      { font-size: .9rem; font-weight: 800; color: var(--navy); }
+    .rec-price-free { font-size: .9rem; font-weight: 800; color: var(--green); }
+    .btn-rec-cart { padding: 5px 12px; background: var(--navy); color: #fff; font-family: 'Poppins', sans-serif; font-size: .73rem; font-weight: 600; border: none; border-radius: 6px; cursor: pointer; }
+    .btn-rec-cart:hover { background: var(--blue); }
+    .btn-rec-details { padding: 5px 10px; background: transparent; color: var(--blue); font-family: 'Poppins', sans-serif; font-size: .73rem; font-weight: 600; border: 1.5px solid var(--blue); border-radius: 6px; cursor: pointer; }
+
+    /* FOOTER */
+    footer { background: #0f172a; color: #94a3b8; padding: 28px 0; text-align: center; font-size: .82rem; margin-top: 64px; }
+    footer a { color: var(--sky); }
+
+    @media (max-width: 900px) { .course-hero-inner { grid-template-columns: 1fr; } .page-layout { grid-template-columns: 1fr; } .side-sticky { position: static; } .action-card { margin-top: 0; } }
+    @media (max-width: 480px) { .nav-inner, .container { padding: 0 16px; } .nav-name { display: none; } .course-hero-title { font-size: 1.5rem; } }
+  </style>
+</head>
+<body>
+
+<!-- NAVBAR -->
+<nav class="navbar">
+  <div class="nav-inner">
+    <a href="/" class="nav-logo">Course<span>Hub</span></a>
+    <div class="nav-right">
+      <span class="nav-badge">🎓 Student</span>
+      <!-- THYMELEAF: th:text="${session.user.firstname}" -->
+      <span class="nav-name" th:text="${session.user.firstname}">Rahul</span>
+      <a href="/student-home"><button class="btn-nav-ghost">🏠 Dashboard</button></a>
+      <a href="/all-courses"><button class="btn-nav-ghost">← All Courses</button></a>
+      <div class="cart-btn-wrap">
+        <a href="/cart"><button class="btn-cart">🛒 Cart</button></a>
+        <!--
+          THYMELEAF: th:if="${cartCount != null and cartCount > 0}"
+                     th:text="${cartCount}"
+        -->
+        <span class="cart-count"
+              th:if="${cartCount != null and cartCount > 0}"
+              th:text="${cartCount}">0</span>
+      </div>
+      <a href="/logout"><button class="btn-logout">Logout</button></a>
+    </div>
+  </div>
+</nav>
+
+<!-- COURSE HERO BANNER -->
+<div class="course-hero">
+  <div class="container">
+
+    <!-- Breadcrumb -->
+    <div class="breadcrumb">
+      <a href="/student-home">Dashboard</a>
+      <span>›</span>
+      <a href="/all-courses">All Courses</a>
+      <span>›</span>
+      <!--
+        THYMELEAF: th:text="${course.courseName}"
+      -->
+      <span th:text="${course.courseName}">Course Name</span>
+    </div>
+
+    <div class="course-hero-inner">
+
+      <!-- LEFT: Course Info -->
+      <div>
+        <!--
+          THYMELEAF: th:if / th:unless for free vs paid pill
+        -->
+        <span class="course-type-pill pill-paid"
+              th:if="${course.courseType != 'free'}">💰 Paid Course</span>
+        <span class="course-type-pill pill-free"
+              th:if="${course.courseType == 'free'}">🆓 Free Course</span>
+
+        <!--
+          THYMELEAF: th:text="${course.courseName}"
+        -->
+        <h1 class="course-hero-title" th:text="${course.courseName}">
+          Spring Boot for Beginners — From Zero to REST API
+        </h1>
+
+        <!--
+          THYMELEAF: th:text="${course.courseShortDescription}"
+        -->
+        <p class="course-hero-desc" th:text="${course.courseShortDescription}">
+          Build production-ready REST APIs using Spring Boot, JPA, and MySQL from scratch. Perfect for Java developers stepping into backend development.
+        </p>
+
+        <div class="course-meta-row">
+          <!--
+            THYMELEAF: th:text="'👨‍💻 By ' + ${course.trainerName}"
+          -->
+          <div class="course-meta-item" th:text="'👨‍💻 By ' + ${course.trainerName}">
+            👨‍💻 By Arjun Patel
+          </div>
+          <!--
+            THYMELEAF: th:text="${#lists.size(course.lessons)} + ' Lessons'"
+          -->
+          <div class="course-meta-item"
+               th:text="'📚 ' + ${#lists.size(course.lessons)} + ' Lessons'">
+            📚 24 Lessons
+          </div>
+          <!--
+            THYMELEAF: th:text="'🆔 ID: ' + ${course.courseId}"
+          -->
+          <div class="course-meta-item"
+               th:text="'🆔 ' + ${course.courseId}">
+            🆔 JAVA101
+          </div>
+        </div>
+      </div>
+
+      <!-- RIGHT: Action Card -->
+      <div>
+        <div class="action-card">
+          <!--
+            THYMELEAF: Show price or Free based on courseType
+          -->
+          <div class="action-price"
+               th:if="${course.courseType != 'free'}"
+               th:text="'₹' + ${course.coursePrice}">₹999</div>
+          <div class="action-price-free"
+               th:if="${course.courseType == 'free'}">Free</div>
+          <div class="action-label">One-time payment • Lifetime access</div>
+
+          <!--
+            ADD TO CART
+            THYMELEAF: th:href="@{/cart/add(courseId=${course.courseId})}"
+            Calls CartController.addToCart()
+          -->
+          <a th:href="@{/cart/add(courseId=${course.courseId})}"
+             href="/cart/add?courseId=JAVA101">
+            <button class="btn-add-cart-large">🛒 Add to Cart</button>
+          </a>
+
+          <!--
+            ENROLL NOW (same as add to cart for now — future direct enroll)
+            THYMELEAF: th:href="@{/cart/add(courseId=${course.courseId})}"
+          -->
+          <a th:href="@{/cart/add(courseId=${course.courseId})}"
+             href="/cart/add?courseId=JAVA101"
+             class="btn-enroll-large">
+            ⚡ Enroll Now
+          </a>
+
+          <div class="action-includes">
+            <h4>This course includes:</h4>
+            <!--
+              THYMELEAF: th:text="${#lists.size(course.lessons)} + ' video lessons'"
+            -->
+            <div class="include-item">📹
+              <span th:text="${#lists.size(course.lessons)} + ' video lessons'">24 video lessons</span>
+            </div>
+            <div class="include-item">📄 <span>Downloadable study notes</span></div>
+            <div class="include-item">🏆 <span>Certificate of completion</span></div>
+            <div class="include-item">♾️ <span>Lifetime access</span></div>
+            <div class="include-item">📱 <span>Access on any device</span></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- MAIN -->
+<main class="main">
+  <div class="container">
+    <div class="page-layout">
+
+      <!-- LEFT: Lessons List -->
+      <div>
+        <div class="lessons-card">
+          <div class="lessons-header">
+            <h2>📖 Course Lessons</h2>
+            <!--
+              THYMELEAF: th:text="${#lists.size(course.lessons)} + ' total lessons'"
+            -->
+            <span class="lesson-count-badge"
+                  th:text="${#lists.size(course.lessons)} + ' total'">0 total</span>
+          </div>
+
+          <!--
+          ═══════════════════════════════════════════════════════════════
+          THYMELEAF: Loop through lessons
+
+          NO LESSONS:
+            <div style="padding:24px;text-align:center;color:var(--muted);"
+                 th:if="${#lists.isEmpty(course.lessons)}">
+              No lessons added yet.
+            </div>
+
+          LESSON ROWS:
+            <div class="lesson-row"
+                 th:each="lesson : ${course.lessons}"
+                 th:unless="${#lists.isEmpty(course.lessons)}">
+
+              <div class="lesson-num" th:text="${lesson.lessonId}">1</div>
+
+              <div class="lesson-info">
+                <div class="lesson-name"  th:text="${lesson.lessonName}">Lesson Name</div>
+                <div class="lesson-topic" th:text="'📌 ' + ${lesson.lessonTopic}">📌 Topic</div>
+                <div class="lesson-desc"  th:text="${lesson.lessonDescription}">Desc</div>
+                Locked message for non-enrolled students:
+                <div class="lesson-locked">🔒 Enroll to unlock this lesson</div>
+              </div>
+
+            </div>
+          ═══════════════════════════════════════════════════════════════ -->
+
+          <!-- Static demo lessons — remove when backend connected -->
+          <div class="lesson-row">
+            <div class="lesson-num">1</div>
+            <div class="lesson-info">
+              <div class="lesson-name">Introduction to Spring Boot</div>
+              <div class="lesson-topic">📌 Getting Started</div>
+              <div class="lesson-desc">Overview of Spring Boot — what it is, why we use it, and how it differs from plain Spring Framework.</div>
+              <div class="lesson-locked">🔒 Enroll to unlock this lesson</div>
+            </div>
+          </div>
+          <div class="lesson-row">
+            <div class="lesson-num">2</div>
+            <div class="lesson-info">
+              <div class="lesson-name">Setting Up Your Development Environment</div>
+              <div class="lesson-topic">📌 Getting Started</div>
+              <div class="lesson-desc">Install Java 17, IntelliJ IDEA, and configure Maven. Run your first Spring Boot project.</div>
+              <div class="lesson-locked">🔒 Enroll to unlock this lesson</div>
+            </div>
+          </div>
+          <div class="lesson-row">
+            <div class="lesson-num">3</div>
+            <div class="lesson-info">
+              <div class="lesson-name">Spring Dependency Injection</div>
+              <div class="lesson-topic">📌 Core Concepts</div>
+              <div class="lesson-desc">Understand @Autowired, @Component, @Service, and @Repository with practical examples.</div>
+              <div class="lesson-locked">🔒 Enroll to unlock this lesson</div>
+            </div>
+          </div>
+          <div class="lesson-row">
+            <div class="lesson-num">4</div>
+            <div class="lesson-info">
+              <div class="lesson-name">Building Your First REST API</div>
+              <div class="lesson-topic">📌 REST &amp; HTTP Methods</div>
+              <div class="lesson-desc">Create GET, POST, PUT, DELETE endpoints. Test with Postman step by step.</div>
+              <div class="lesson-locked">🔒 Enroll to unlock this lesson</div>
+            </div>
+          </div>
+          <div class="lesson-row">
+            <div class="lesson-num">5</div>
+            <div class="lesson-info">
+              <div class="lesson-name">Spring Data JPA &amp; MySQL</div>
+              <div class="lesson-topic">📌 Database Integration</div>
+              <div class="lesson-desc">Connect Spring Boot to MySQL. Create entities, repositories, and run CRUD operations.</div>
+              <div class="lesson-locked">🔒 Enroll to unlock this lesson</div>
+            </div>
+          </div>
+
+          <!-- Show more hint if many lessons -->
+          <div style="padding:14px 22px;text-align:center;font-size:.82rem;color:var(--muted);border-top:1px solid var(--border);">
+            + 19 more lessons after enrolling
+          </div>
+
+        </div><!-- /lessons-card -->
+
+        <!-- Back navigation -->
+        <div style="margin-top:18px; display:flex; gap:14px; align-items:center;">
+          <a href="/all-courses" style="font-size:.84rem;font-weight:600;color:var(--blue);">← Back to All Courses</a>
+          <span style="color:var(--border);">|</span>
+          <a href="/student-home" style="font-size:.84rem;font-weight:600;color:var(--blue);">🏠 Dashboard</a>
+          <span style="color:var(--border);">|</span>
+          <a href="/cart" style="font-size:.84rem;font-weight:600;color:var(--blue);">🛒 View Cart</a>
+        </div>
+      </div>
+
+      <!-- RIGHT: What You'll Learn + sticky -->
+      <div class="side-sticky">
+        <div class="learn-card">
+          <h3>🎯 What You'll Learn</h3>
+          <div class="learn-item"><span class="learn-check">✓</span><span>Build REST APIs with Spring Boot</span></div>
+          <div class="learn-item"><span class="learn-check">✓</span><span>Connect to MySQL with Spring Data JPA</span></div>
+          <div class="learn-item"><span class="learn-check">✓</span><span>Implement CRUD operations</span></div>
+          <div class="learn-item"><span class="learn-check">✓</span><span>Use Postman for API testing</span></div>
+          <div class="learn-item"><span class="learn-check">✓</span><span>Understand Dependency Injection</span></div>
+          <div class="learn-item"><span class="learn-check">✓</span><span>Deploy a working backend application</span></div>
+        </div>
+      </div>
+
+    </div><!-- /page-layout -->
+
+    <!-- RECOMMENDED COURSES -->
+    <div class="mt-section">
+      <span class="section-tag">✨ You Might Also Like</span>
+      <h2 class="section-title">Recommended Courses</h2>
+
+      <!--
+      THYMELEAF: th:each="c : ${recommended}"
+        <div class="rec-card" th:each="c : ${recommended}">
+          <div class="rec-icon ci-1">📘</div>
+          <div class="rec-info">
+            <div class="rec-name"    th:text="${c.courseName}">Name</div>
+            <div class="rec-trainer" th:text="'By ' + ${c.trainerName}">By Trainer</div>
+          </div>
+          <div class="rec-right">
+            <div class="rec-price"      th:if="${c.courseType != 'free'}"
+                 th:text="'₹' + ${c.coursePrice}">₹999</div>
+            <div class="rec-price-free" th:if="${c.courseType == 'free'}">Free</div>
+            <a th:href="@{/cart/add(courseId=${c.courseId})}">
+              <button class="btn-rec-cart">+ Cart</button>
+            </a>
+            <a th:href="@{/course-details/{id}(id=${c.courseId})}">
+              <button class="btn-rec-details">Details</button>
+            </a>
+          </div>
+        </div>
+      -->
+
+      <!-- Static recommended — remove when backend connected -->
+      <div class="rec-grid">
+        <div class="rec-card">
+          <div class="rec-icon ci-2">🐍</div>
+          <div class="rec-info">
+            <div class="rec-name">Python Programming — Complete Beginner's Guide</div>
+            <div class="rec-trainer">By Sneha Roy</div>
+          </div>
+          <div class="rec-right">
+            <div class="rec-price-free">Free</div>
+            <a href="/cart/add?courseId=PY201"><button class="btn-rec-cart">+ Cart</button></a>
+            <a href="/course-details/PY201"><button class="btn-rec-details">Details</button></a>
+          </div>
+        </div>
+        <div class="rec-card">
+          <div class="rec-icon ci-3">🌐</div>
+          <div class="rec-info">
+            <div class="rec-name">HTML, CSS &amp; JavaScript — Build Real Websites</div>
+            <div class="rec-trainer">By Vikram Das</div>
+          </div>
+          <div class="rec-right">
+            <div class="rec-price">₹799</div>
+            <a href="/cart/add?courseId=WEB301"><button class="btn-rec-cart">+ Cart</button></a>
+            <a href="/course-details/WEB301"><button class="btn-rec-details">Details</button></a>
+          </div>
+        </div>
+        <div class="rec-card">
+          <div class="rec-icon ci-4">📊</div>
+          <div class="rec-info">
+            <div class="rec-name">Data Analysis with Python and Pandas</div>
+            <div class="rec-trainer">By Priya Mehta</div>
+          </div>
+          <div class="rec-right">
+            <div class="rec-price">₹1,299</div>
+            <a href="/cart/add?courseId=DS401"><button class="btn-rec-cart">+ Cart</button></a>
+            <a href="/course-details/DS401"><button class="btn-rec-details">Details</button></a>
+          </div>
+        </div>
+        <div class="rec-card">
+          <div class="rec-icon ci-6">⚛️</div>
+          <div class="rec-info">
+            <div class="rec-name">React.js — Build Modern Web Applications</div>
+            <div class="rec-trainer">By Rohit Sharma</div>
+          </div>
+          <div class="rec-right">
+            <div class="rec-price">₹1,199</div>
+            <a href="/cart/add?courseId=FE601"><button class="btn-rec-cart">+ Cart</button></a>
+            <a href="/course-details/FE601"><button class="btn-rec-details">Details</button></a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</main>
+
+<footer>
+  <div class="container">
+    <p>© 2026 <a href="/">CourseHub</a> &nbsp;|&nbsp; <a href="/student-home">Dashboard</a> &nbsp;|&nbsp; <a href="/all-courses">All Courses</a> &nbsp;|&nbsp; <a href="/cart">Cart</a></p>
+  </div>
+</footer>
+
+</body>
+</html>

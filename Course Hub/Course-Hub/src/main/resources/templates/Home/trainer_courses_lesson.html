@@ -1,0 +1,813 @@
+<!DOCTYPE html>
+<!--
+╔═══════════════════════════════════════════════════════════════════════════════╗
+║           trainer_MyCourses.html  —  TRAINER'S OWN COURSES & LESSONS        ║
+╠═══════════════════════════════════════════════════════════════════════════════╣
+║                                                                               ║
+║  ┌─────────────────────────────────────────────────────────────────────────┐ ║
+║  │                      THE BIG PICTURE                                    │ ║
+║  │                                                                         │ ║
+║  │  Every trainer who registers has:                                       │ ║
+║  │    firstname + lastname stored in the Users table                       │ ║
+║  │                                                                         │ ║
+║  │  Every course that a trainer creates has:                               │ ║
+║  │    trainerName stored in the Course table                               │ ║
+║  │    (the trainer types their name in the "Add Course" form)              │ ║
+║  │                                                                         │ ║
+║  │  To find THIS trainer's courses we filter by trainerName:              │ ║
+║  │    SELECT * FROM course WHERE trainer_name = 'Arjun Patel'             │ ║
+║  │                                                                         │ ║
+║  │  In Java/Spring: CourseRepository.findByTrainerName("Arjun Patel")     │ ║
+║  │                                                                         │ ║
+║  │  The trainer's full name comes from the session:                        │ ║
+║  │    session.user.firstname + " " + session.user.lastname                 │ ║
+║  └─────────────────────────────────────────────────────────────────────────┘ ║
+║                                                                               ║
+║  DATA FLOW:                                                                   ║
+║  Trainer clicks "My Courses"                                                  ║
+║    → GET /my-courses                                                          ║
+║    → NavController.myCourses(HttpSession session, Model model)                ║
+║    → Gets trainer's full name from session                                    ║
+║    → Calls TrainerService.getCoursesByTrainer(trainerFullName)                ║
+║    → TrainerServiceImpl calls CourseRepository.findByTrainerName(name)        ║
+║    → JPA runs: SELECT * FROM course WHERE trainer_name = ?                    ║
+║    → Returns List<Course> — each Course already has its List<Lesson>         ║
+║       (because Course has @OneToMany List<Lesson> lessons)                    ║
+║    → model.addAttribute("courses", courses)                                   ║
+║    → Thymeleaf renders this page                                              ║
+║    → th:each loops through courses, inside each course loops through lessons  ║
+║                                                                               ║
+╠═══════════════════════════════════════════════════════════════════════════════╣
+║  BACKEND CODE TO ADD — STEP BY STEP                                          ║
+╠═══════════════════════════════════════════════════════════════════════════════╣
+║                                                                               ║
+║  STEP 1 ── CourseRepository.java                                              ║
+║  ─────────────────────────────────                                            ║
+║  Add this method. Spring Data JPA auto-implements it — no SQL needed.        ║
+║  The method name "findByTrainerName" is the magic — JPA reads the name       ║
+║  and generates:  SELECT * FROM course WHERE trainer_name = ?                 ║
+║                                                                               ║
+║    package com.example.Course.Hub.REPOSITORY;                                ║
+║    import com.example.Course.Hub.ENTITY.Course;                              ║
+║    import org.springframework.data.jpa.repository.JpaRepository;             ║
+║    import java.util.List;                                                     ║
+║                                                                               ║
+║    public interface CourseRepository extends JpaRepository<Course, String> { ║
+║        List<Course> findByTrainerName(String trainerName);  // ADD THIS      ║
+║    }                                                                          ║
+║                                                                               ║
+║  ────────────────────────────────────────────────────────────────────────    ║
+║  STEP 2 ── TrainerService.java  (interface)                                   ║
+║  ─────────────────────────────────────────                                    ║
+║  Add two method signatures:                                                   ║
+║                                                                               ║
+║    List<Course> getAllCourses();                    // already added earlier  ║
+║    List<Course> getCoursesByTrainer(String name);  // ADD THIS               ║
+║                                                                               ║
+║  ────────────────────────────────────────────────────────────────────────    ║
+║  STEP 3 ── TrainerServiceImplementation.java                                  ║
+║  ───────────────────────────────────────────                                  ║
+║  Implement the new method:                                                    ║
+║                                                                               ║
+║    @Override                                                                  ║
+║    public List<Course> getCoursesByTrainer(String trainerName) {             ║
+║        return cRepo.findByTrainerName(trainerName);                           ║
+║    }                                                                          ║
+║                                                                               ║
+║    // Also add getAllCourses() if not added yet:                              ║
+║    @Override                                                                  ║
+║    public List<Course> getAllCourses() {                                      ║
+║        return cRepo.findAll();                                                ║
+║    }                                                                          ║
+║                                                                               ║
+║  ────────────────────────────────────────────────────────────────────────    ║
+║  STEP 4 ── NavController.java                                                 ║
+║  ────────────────────────────                                                 ║
+║  Add these imports at the top:                                                ║
+║    import com.example.Course.Hub.ENTITY.Course;                              ║
+║    import com.example.Course.Hub.ENTITY.Users;                               ║
+║    import com.example.Course.Hub.SERVICES.Trainer.TrainerService;            ║
+║    import jakarta.servlet.http.HttpSession;                                   ║
+║    import org.springframework.beans.factory.annotation.Autowired;            ║
+║    import org.springframework.ui.Model;                                       ║
+║    import java.util.List;                                                     ║
+║                                                                               ║
+║  Add @Autowired field inside NavController class:                             ║
+║    @Autowired                                                                 ║
+║    TrainerService tService;                                                   ║
+║                                                                               ║
+║  Add the route method:                                                        ║
+║                                                                               ║
+║    @GetMapping("/my-courses")                                                 ║
+║    public String myCourses(HttpSession session, Model model) {               ║
+║                                                                               ║
+║        // 1. Get the logged-in trainer from session                           ║
+║        Users trainer = (Users) session.getAttribute("user");                 ║
+║                                                                               ║
+║        // 2. Build the full name exactly as it was entered in Add Course form ║
+║        //    e.g. "Arjun Patel" (firstname + space + lastname)               ║
+║        String trainerFullName = trainer.getFirstname() + " " + trainer.getLastname(); ║
+║                                                                               ║
+║        // 3. Fetch only THIS trainer's courses from the DB                   ║
+║        List<Course> courses = tService.getCoursesByTrainer(trainerFullName); ║
+║                                                                               ║
+║        // 4. Count total lessons across all courses                           ║
+║        int totalLessons = 0;                                                  ║
+║        for (Course c : courses) {                                             ║
+║            totalLessons += c.getLessons().size();                             ║
+║        }                                                                      ║
+║                                                                               ║
+║        // 5. Put everything in the model for Thymeleaf                        ║
+║        model.addAttribute("courses", courses);                               ║
+║        model.addAttribute("courseCount", courses.size());                    ║
+║        model.addAttribute("lessonCount", totalLessons);                      ║
+║        model.addAttribute("trainerName", trainerFullName);                   ║
+║                                                                               ║
+║        return "Home/trainer_MyCourses";                                       ║
+║    }                                                                          ║
+║                                                                               ║
+║  ────────────────────────────────────────────────────────────────────────    ║
+║  STEP 5 ── trainer-home.html — Update "My Courses" link                      ║
+║  ─────────────────────────────────────────────────────                        ║
+║  In trainer_Home.html, find the "My Courses" table section and change        ║
+║  the nav link from  href="#my-courses"  to  href="/my-courses"               ║
+║                                                                               ║
+║  ────────────────────────────────────────────────────────────────────────    ║
+║  STEP 6 ── File location                                                      ║
+║  ─────────────────────────                                                    ║
+║  Save this file as:                                                           ║
+║    src/main/resources/templates/Home/trainer_MyCourses.html                  ║
+║                                                                               ║
+╠═══════════════════════════════════════════════════════════════════════════════╣
+║  IMPORTANT NOTE ABOUT TRAINER NAME MATCHING                                   ║
+║  ─────────────────────────────────────────                                    ║
+║  The filter works ONLY IF the trainer typed their name in the Add Course form ║
+║  EXACTLY as it appears in their User account (firstname + " " + lastname).   ║
+║                                                                               ║
+║  Example:                                                                     ║
+║    User.firstname = "Arjun"   User.lastname = "Patel"                        ║
+║    → trainerFullName = "Arjun Patel"                                         ║
+║    → Course.trainerName must also be "Arjun Patel" (exact match)             ║
+║                                                                               ║
+║  TIP: To avoid mismatch, auto-fill the trainer name in the Add Course form   ║
+║  from the session so the trainer can't type it wrong:                         ║
+║    In add_Course.html input field:                                            ║
+║    th:value="${session.user.firstname} + ' ' + ${session.user.lastname}"     ║
+║                                                                               ║
+╠═══════════════════════════════════════════════════════════════════════════════╣
+║  THYMELEAF FIELDS IN THIS PAGE                                                ║
+║  ─────────────────────────────                                                ║
+║  ${session.user.firstname}              → trainer's first name               ║
+║  ${trainerName}                         → "Arjun Patel" (full name)          ║
+║  ${courseCount}                         → number of courses by this trainer  ║
+║  ${lessonCount}                         → total lessons across all courses    ║
+║  th:each="course : ${courses}"          → loop through this trainer's courses ║
+║  ${course.courseId}                     → e.g. "JAVA101"                     ║
+║  ${course.courseName}                   → e.g. "Spring Boot for Beginners"   ║
+║  ${course.courseShortDescription}       → short description text             ║
+║  ${course.coursePrice}                  → e.g. "999"                         ║
+║  ${course.courseType}                   → "free" or "paid"                   ║
+║  ${#lists.size(course.lessons)}         → lesson count for this course        ║
+║  th:each="lesson : ${course.lessons}"  → loop lessons inside each course     ║
+║  ${lesson.lessonId}                     → e.g. 1                             ║
+║  ${lesson.lessonName}                   → e.g. "Introduction to Spring Boot" ║
+║  ${lesson.lessonTopic}                  → e.g. "Getting Started"             ║
+║  ${lesson.lessonDescription}            → lesson description text            ║
+║  ${lesson.lessonVideoLink}              → video URL                          ║
+╚═══════════════════════════════════════════════════════════════════════════════╝
+-->
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Courses — Course Hub</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+          --navy:   #1a237e;
+          --blue:   #1565c0;
+          --sky:    #90caf9;
+          --bg:     #f4f6fb;
+          --text:   #1e293b;
+          --muted:  #64748b;
+          --border: #e2e8f0;
+          --green:  #2e7d32;
+          --green-light: #e8f5e9;
+          --amber:  #f59e0b;
+          --amber-light: #fffbeb;
+          --card-shadow:       0 4px 20px rgba(26,35,126,.07);
+          --card-shadow-hover: 0 8px 28px rgba(26,35,126,.13);
+        }
+
+        body { font-family: 'Poppins', sans-serif; background: var(--bg); color: var(--text); font-size: 15px; line-height: 1.6; }
+        a { text-decoration: none; color: inherit; }
+        ul { list-style: none; }
+
+        /* ══════════════════════════════════════
+           NAVBAR
+        ══════════════════════════════════════ */
+        .navbar { background: var(--navy); position: sticky; top: 0; z-index: 200; box-shadow: 0 2px 12px rgba(0,0,0,.18); }
+        .nav-inner { max-width: 1200px; margin: 0 auto; padding: 0 28px; height: 64px; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+        .nav-logo { font-size: 1.4rem; font-weight: 800; color: #fff; letter-spacing: -.5px; }
+        .nav-logo span { color: var(--sky); }
+        .nav-center { display: flex; gap: 28px; }
+        .nav-center a { font-size: .88rem; font-weight: 500; color: rgba(255,255,255,.75); padding: 6px 0; border-bottom: 2px solid transparent; transition: all .2s; }
+        .nav-center a.active, .nav-center a:hover { color: #fff; border-bottom-color: var(--sky); }
+        .nav-right { display: flex; align-items: center; gap: 12px; }
+        .nav-badge { background: rgba(255,255,255,.12); color: var(--sky); font-size: .76rem; font-weight: 600; padding: 4px 12px; border-radius: 20px; }
+        .nav-name  { font-size: .82rem; color: rgba(255,255,255,.75); font-weight: 500; }
+        .btn-nav-ghost { padding: 7px 16px; font-family: 'Poppins', sans-serif; font-size: .82rem; font-weight: 600; background: rgba(255,255,255,.12); color: #fff; border: 1.5px solid rgba(255,255,255,.28); border-radius: 7px; cursor: pointer; transition: background .2s; }
+        .btn-nav-ghost:hover { background: rgba(255,255,255,.22); }
+        .btn-logout { padding: 7px 17px; font-family: 'Poppins', sans-serif; font-size: .83rem; font-weight: 600; color: var(--navy); background: #fff; border: none; border-radius: 7px; cursor: pointer; }
+        .btn-logout:hover { opacity: .88; }
+
+        /* ══════════════════════════════════════
+           PAGE BANNER
+        ══════════════════════════════════════ */
+        .page-banner { background: linear-gradient(135deg, var(--navy) 0%, var(--blue) 100%); padding: 42px 0 34px; color: #fff; }
+        .container   { max-width: 1200px; margin: 0 auto; padding: 0 28px; }
+        .banner-inner { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 24px; }
+
+        .banner-text h1 { font-size: 1.85rem; font-weight: 800; margin-bottom: 6px; line-height: 1.2; }
+        .banner-text h1 span { color: var(--sky); }
+        .banner-text p  { font-size: .9rem; color: rgba(255,255,255,.72); max-width: 440px; line-height: 1.7; }
+
+        /* stat pills on banner */
+        .banner-stats { display: flex; gap: 14px; flex-wrap: wrap; }
+        .bstat { background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.18); border-radius: 12px; padding: 14px 20px; text-align: center; min-width: 110px; }
+        .bstat-num   { display: block; font-size: 1.7rem; font-weight: 800; color: var(--sky); }
+        .bstat-label { font-size: .76rem; color: rgba(255,255,255,.65); margin-top: 2px; }
+
+        /* breadcrumb */
+        .breadcrumb { display: flex; align-items: center; gap: 8px; font-size: .8rem; color: rgba(255,255,255,.55); padding-top: 16px; }
+        .breadcrumb a { color: rgba(255,255,255,.8); font-weight: 500; }
+        .breadcrumb a:hover { color: #fff; }
+
+        /* ══════════════════════════════════════
+           ACTION BAR
+        ══════════════════════════════════════ */
+        .action-bar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin: 30px 0 24px; }
+        .action-bar-left { display: flex; flex-direction: column; }
+        .section-tag   { font-size: .7rem; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; color: var(--blue); margin-bottom: 4px; display: block; }
+        .section-title { font-size: 1.2rem; font-weight: 700; color: var(--text); }
+        .action-bar-right { display: flex; gap: 10px; flex-wrap: wrap; }
+
+        .btn-add-course {
+          padding: 9px 20px; background: var(--navy); color: #fff;
+          font-family: 'Poppins', sans-serif; font-size: .84rem; font-weight: 600;
+          border: none; border-radius: 8px; cursor: pointer;
+        }
+        .btn-add-course:hover { background: var(--blue); }
+        .btn-add-lesson {
+          padding: 9px 20px; background: transparent; color: var(--navy);
+          font-family: 'Poppins', sans-serif; font-size: .84rem; font-weight: 600;
+          border: 1.5px solid var(--navy); border-radius: 8px; cursor: pointer;
+        }
+        .btn-add-lesson:hover { background: var(--navy); color: #fff; }
+
+        /* ══════════════════════════════════════
+           MAIN
+        ══════════════════════════════════════ */
+        .main { padding: 0 0 72px; }
+
+        /* ── COURSE BLOCK ── */
+        /*
+          One "course block" per course. Each block has:
+            • Course header card (name, description, price, lesson count, type)
+            • Lesson table below it showing all lessons in that course
+        */
+        .course-block { margin-bottom: 28px; }
+
+        /* Course header card */
+        .course-header {
+          background: #fff; border: 1px solid var(--border); border-radius: 14px 14px 0 0;
+          padding: 18px 22px; display: flex; align-items: center; gap: 16px;
+          box-shadow: var(--card-shadow); border-bottom: none;
+        }
+        .course-icon {
+          width: 52px; height: 52px; border-radius: 11px; flex-shrink: 0;
+          display: flex; align-items: center; justify-content: center; font-size: 1.6rem;
+        }
+        .ci-1 { background: linear-gradient(135deg,#bbdefb,#90caf9); }
+        .ci-2 { background: linear-gradient(135deg,#e8eaf6,#c5cae9); }
+        .ci-3 { background: linear-gradient(135deg,#b2dfdb,#80cbc4); }
+        .ci-4 { background: linear-gradient(135deg,#ffe0b2,#ffcc80); }
+        .ci-5 { background: linear-gradient(135deg,#fce4ec,#f8bbd0); }
+        .ci-6 { background: linear-gradient(135deg,#c8e6c9,#a5d6a7); }
+
+        .course-header-info { flex: 1; min-width: 0; }
+        .course-badge-row   { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 4px; }
+
+        .badge {
+          display: inline-block; font-size: .65rem; font-weight: 700;
+          text-transform: uppercase; letter-spacing: .05em;
+          padding: 2px 9px; border-radius: 20px;
+        }
+        .badge-id    { background: #f1f5f9; color: var(--muted); }
+        .badge-free  { background: var(--green-light); color: var(--green); }
+        .badge-paid  { background: #e3f2fd; color: var(--blue); }
+
+        .course-name { font-size: 1rem; font-weight: 700; color: var(--text); margin-bottom: 3px; line-height: 1.35; }
+        .course-desc { font-size: .8rem; color: var(--muted); line-height: 1.6; }
+
+        .course-header-right { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; flex-shrink: 0; }
+        .course-price      { font-size: 1.1rem; font-weight: 800; color: var(--navy); }
+        .course-price-free { font-size: 1.1rem; font-weight: 800; color: var(--green); }
+        .lesson-count-badge {
+          font-size: .72rem; font-weight: 600; color: var(--muted);
+          background: var(--bg); border: 1px solid var(--border);
+          padding: 3px 10px; border-radius: 20px;
+        }
+
+        /* Lesson table */
+        .lesson-table-wrap {
+          background: #fff; border: 1px solid var(--border);
+          border-radius: 0 0 14px 14px; overflow: hidden;
+          box-shadow: var(--card-shadow);
+        }
+        .lesson-table-header {
+          background: var(--bg); padding: 10px 22px;
+          display: flex; align-items: center; justify-content: space-between;
+          border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
+        }
+        .lesson-table-header span { font-size: .75rem; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); }
+
+        /* lesson rows */
+        .lesson-row {
+          display: flex; align-items: flex-start; gap: 14px;
+          padding: 14px 22px; border-top: 1px solid var(--border);
+          transition: background .15s;
+        }
+        .lesson-row:hover { background: #fafbff; }
+
+        .lesson-num {
+          width: 32px; height: 32px; border-radius: 8px; flex-shrink: 0;
+          background: #e3f2fd; color: var(--blue);
+          font-size: .78rem; font-weight: 700;
+          display: flex; align-items: center; justify-content: center;
+        }
+
+        .lesson-info   { flex: 1; min-width: 0; }
+        .lesson-name   { font-size: .88rem; font-weight: 700; color: var(--text); margin-bottom: 2px; }
+        .lesson-topic  { font-size: .75rem; font-weight: 600; color: var(--blue); margin-bottom: 3px; }
+        .lesson-desc   { font-size: .77rem; color: var(--muted); line-height: 1.55; }
+
+        .lesson-right  { flex-shrink: 0; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+        .lesson-id-badge { font-size: .68rem; color: var(--muted); background: var(--bg); border: 1px solid var(--border); padding: 2px 8px; border-radius: 10px; white-space: nowrap; }
+
+        .btn-video {
+          padding: 5px 13px; font-family: 'Poppins', sans-serif; font-size: .74rem; font-weight: 600;
+          background: transparent; color: var(--blue); border: 1.5px solid var(--blue);
+          border-radius: 6px; cursor: pointer; white-space: nowrap;
+        }
+        .btn-video:hover { background: var(--blue); color: #fff; }
+
+        /* No video fallback */
+        .no-video { font-size: .72rem; color: #b0bec5; font-style: italic; }
+
+        /* No lessons empty state inside a course */
+        .no-lessons {
+          padding: 22px; text-align: center;
+          font-size: .84rem; color: var(--muted); border-top: 1px solid var(--border);
+        }
+        .no-lessons a { color: var(--blue); font-weight: 600; }
+
+        /* ── EMPTY STATE (no courses at all) ── */
+        .empty-state {
+          text-align: center; padding: 60px 20px; background: #fff;
+          border: 1.5px dashed var(--border); border-radius: 16px;
+        }
+        .empty-icon { font-size: 3rem; margin-bottom: 14px; }
+        .empty-state h3 { font-size: 1.05rem; font-weight: 700; color: var(--text); margin-bottom: 6px; }
+        .empty-state p  { font-size: .86rem; color: var(--muted); margin-bottom: 22px; max-width: 320px; margin-left: auto; margin-right: auto; }
+        .btn-empty-action {
+          padding: 10px 26px; background: var(--navy); color: #fff;
+          font-family: 'Poppins', sans-serif; font-size: .88rem; font-weight: 600;
+          border: none; border-radius: 8px; cursor: pointer;
+        }
+
+        /* ── FOOTER ── */
+        footer { background: #0f172a; color: #94a3b8; padding: 28px 0; text-align: center; font-size: .82rem; margin-top: 64px; }
+        footer a { color: var(--sky); }
+
+        /* ── RESPONSIVE ── */
+        @media (max-width: 820px) {
+          .nav-center { display: none; }
+          .banner-text h1 { font-size: 1.5rem; }
+          .course-header { flex-wrap: wrap; }
+          .course-header-right { flex-direction: row; align-items: center; }
+          .lesson-row { flex-wrap: wrap; }
+        }
+        @media (max-width: 480px) {
+          .nav-inner, .container { padding: 0 16px; }
+          .nav-name { display: none; }
+          .action-bar { flex-direction: column; align-items: flex-start; }
+        }
+    </style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════
+     NAVBAR
+═══════════════════════════════════════════ -->
+<nav class="navbar">
+    <div class="nav-inner">
+        <a href="/trainer-home" class="nav-logo">Course<span>Hub</span></a>
+
+        <ul class="nav-center">
+            <li><a href="/trainer-home">Dashboard</a></li>
+            <li><a href="/my-courses" class="active">My Courses</a></li>
+        </ul>
+
+        <div class="nav-right">
+            <span class="nav-badge">🧑‍🏫 Trainer</span>
+            <!--
+              THYMELEAF — trainer name from session
+              th:text="${session.user.firstname}"
+            -->
+            <span class="nav-name" th:text="${session.user.firstname}">Arjun</span>
+            <a href="/trainer-profile"><button class="btn-nav-ghost">👤 Profile</button></a>
+            <a href="/logout"><button class="btn-logout">Logout</button></a>
+        </div>
+    </div>
+</nav>
+
+<!-- ═══════════════════════════════════════════
+     BANNER
+═══════════════════════════════════════════ -->
+<div class="page-banner">
+    <div class="container">
+        <div class="banner-inner">
+
+            <div class="banner-text">
+                <!--
+                  THYMELEAF — personalised heading
+                  th:text="'My Courses — ' + ${trainerName}"
+                  OR keep it simple:
+                -->
+                <h1>My <span>Courses &amp; Lessons</span></h1>
+                <!--
+                  THYMELEAF — show trainer's full name
+                  th:text="'Managing all courses created by ' + ${trainerName}"
+                -->
+                <p th:text="'All courses and lessons created by ' + ${trainerName}">
+                    All courses and lessons created by Arjun Patel
+                </p>
+            </div>
+
+            <!--
+              THYMELEAF — real counts from backend
+              courseCount  → set by controller: courses.size()
+              lessonCount  → set by controller: sum of all lessons across all courses
+            -->
+            <div class="banner-stats">
+                <div class="bstat">
+                    <span class="bstat-num" th:text="${courseCount}">0</span>
+                    <div class="bstat-label">My Courses</div>
+                </div>
+                <div class="bstat">
+                    <span class="bstat-num" th:text="${lessonCount}">0</span>
+                    <div class="bstat-label">Total Lessons</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="breadcrumb">
+            <a href="/trainer-home">Dashboard</a>
+            <span>›</span>
+            <span>My Courses</span>
+        </div>
+    </div>
+</div>
+
+<!-- ═══════════════════════════════════════════
+     MAIN CONTENT
+═══════════════════════════════════════════ -->
+<main class="main">
+    <div class="container">
+
+        <!-- Action Bar -->
+        <div class="action-bar">
+            <div class="action-bar-left">
+                <span class="section-tag">📘 Your Content</span>
+                <h2 class="section-title">Courses You Created</h2>
+            </div>
+            <div class="action-bar-right">
+                <a href="/add-course"><button class="btn-add-course">➕ Add New Course</button></a>
+                <a href="/add-Lesson"><button class="btn-add-lesson">📖 Add Lesson</button></a>
+            </div>
+        </div>
+
+        <!--
+        ╔══════════════════════════════════════════════════════════════════════╗
+        ║     HOW THE COURSE + LESSON DISPLAY WORKS WITH THYMELEAF            ║
+        ╠══════════════════════════════════════════════════════════════════════╣
+        ║                                                                      ║
+        ║  OUTER LOOP — courses                                                ║
+        ║  ───────────────────                                                 ║
+        ║  th:each="course : ${courses}"                                       ║
+        ║    Loops through every Course in the trainer's course list.          ║
+        ║    Repeats the entire .course-block div once per course.             ║
+        ║                                                                      ║
+        ║  INNER LOOP — lessons inside each course                             ║
+        ║  ────────────────────────────────────────                            ║
+        ║  th:each="lesson : ${course.lessons}"                                ║
+        ║    Inside each course block, loops through course.getLessons().      ║
+        ║    This works because Course has @OneToMany List<Lesson> lessons.    ║
+        ║    JPA automatically loads the lessons when you load the course.     ║
+        ║                                                                      ║
+        ║  CONDITIONAL EMPTY STATES                                            ║
+        ║  ────────────────────────                                            ║
+        ║  th:if="${#lists.isEmpty(courses)}"                                  ║
+        ║    → Shows "No courses yet" message when the list is empty           ║
+        ║                                                                      ║
+        ║  th:unless="${#lists.isEmpty(courses)}"                              ║
+        ║    → Shows the course blocks only when courses exist                 ║
+        ║                                                                      ║
+        ║  th:if="${#lists.isEmpty(course.lessons)}"                           ║
+        ║    → Shows "No lessons added yet" inside a course that has 0 lessons ║
+        ║                                                                      ║
+        ║  VIDEO LINK HANDLING                                                  ║
+        ║  ────────────────────                                                ║
+        ║  th:if="${lesson.lessonVideoLink != null                             ║
+        ║           and !lesson.lessonVideoLink.isEmpty()}"                    ║
+        ║    → Shows "▶ Watch Video" button only when video link exists        ║
+        ║                                                                      ║
+        ║  th:href="${lesson.lessonVideoLink}"                                  ║
+        ║    → Sets the actual video URL as the href of the anchor tag         ║
+        ║                                                                      ║
+        ╚══════════════════════════════════════════════════════════════════════╝
+
+        REPLACE the static demo content below with this Thymeleaf block:
+
+        ── EMPTY STATE (no courses created yet) ──
+          <div class="empty-state" th:if="${#lists.isEmpty(courses)}">
+            <div class="empty-icon">📭</div>
+            <h3>No Courses Created Yet</h3>
+            <p>You haven't created any courses. Click "Add New Course" to create your first one.</p>
+            <a href="/add-course"><button class="btn-empty-action">➕ Create First Course</button></a>
+          </div>
+
+        ── COURSE BLOCKS LOOP (when courses exist) ──
+          <div th:unless="${#lists.isEmpty(courses)}">
+
+            <div class="course-block" th:each="course : ${courses}">
+
+              ─ COURSE HEADER ─
+              <div class="course-header">
+                <div class="course-icon ci-1">📘</div>
+
+                <div class="course-header-info">
+                  <div class="course-badge-row">
+                    ID badge:
+                      <span class="badge badge-id" th:text="'ID: ' + ${course.courseId}">ID: 101</span>
+                    Free badge (only if free):
+                      <span class="badge badge-free" th:if="${course.courseType == 'free'}">Free</span>
+                    Paid badge (only if paid):
+                      <span class="badge badge-paid" th:unless="${course.courseType == 'free'}">Paid</span>
+                  </div>
+                  Course name:
+                    <div class="course-name" th:text="${course.courseName}">Course Name</div>
+                  Description:
+                    <div class="course-desc" th:text="${course.courseShortDescription}">Description...</div>
+                </div>
+
+                <div class="course-header-right">
+                  Free price:
+                    <div class="course-price-free" th:if="${course.courseType == 'free'}">Free</div>
+                  Paid price:
+                    <div class="course-price" th:unless="${course.courseType == 'free'}"
+                         th:text="'₹' + ${course.coursePrice}">₹999</div>
+                  Lesson count badge:
+                    <span class="lesson-count-badge"
+                          th:text="${#lists.size(course.lessons)} + ' Lessons'">0 Lessons</span>
+                </div>
+              </div>
+
+              ─ LESSON TABLE ─
+              <div class="lesson-table-wrap">
+                <div class="lesson-table-header">
+                  <span>Lessons in this course</span>
+                  <span th:text="${#lists.size(course.lessons)} + ' total'">0 total</span>
+                </div>
+
+                No lessons empty state:
+                  <div class="no-lessons" th:if="${#lists.isEmpty(course.lessons)}">
+                    No lessons added yet.
+                    <a href="/add-Lesson">Add the first lesson →</a>
+                  </div>
+
+                Lesson rows loop:
+                  <div class="lesson-row"
+                       th:each="lesson : ${course.lessons}"
+                       th:unless="${#lists.isEmpty(course.lessons)}">
+
+                    Lesson number:
+                      <div class="lesson-num" th:text="${lesson.lessonId}">1</div>
+
+                    Lesson info:
+                      <div class="lesson-info">
+                        <div class="lesson-name"  th:text="${lesson.lessonName}">Lesson Name</div>
+                        <div class="lesson-topic" th:text="'📌 ' + ${lesson.lessonTopic}">📌 Topic</div>
+                        <div class="lesson-desc"  th:text="${lesson.lessonDescription}">Description</div>
+                      </div>
+
+                    Right side — ID + video button:
+                      <div class="lesson-right">
+                        <span class="lesson-id-badge" th:text="'Lesson #' + ${lesson.lessonId}">Lesson #1</span>
+
+                        Video button (show only if video link exists):
+                          <a th:href="${lesson.lessonVideoLink}" target="_blank"
+                             th:if="${lesson.lessonVideoLink != null and !lesson.lessonVideoLink.isEmpty()}">
+                            <button class="btn-video">▶ Watch Video</button>
+                          </a>
+                        No video fallback:
+                          <span class="no-video"
+                                th:unless="${lesson.lessonVideoLink != null and !lesson.lessonVideoLink.isEmpty()}">
+                            No video yet
+                          </span>
+                      </div>
+
+                  </div>
+              </div>
+
+            </div>
+          </div>
+        ── END OF THYMELEAF BLOCK ── -->
+
+
+        <!-- ══════════════════════════════════════════════════════
+             STATIC DEMO CONTENT — Remove when backend is connected
+        ══════════════════════════════════════════════════════ -->
+
+        <!-- ── COURSE BLOCK 1 ── -->
+        <div class="course-block">
+            <div class="course-header">
+                <div class="course-icon ci-1">☕</div>
+                <div class="course-header-info">
+                    <div class="course-badge-row">
+                        <span class="badge badge-id">ID: JAVA101</span>
+                        <span class="badge badge-paid">Paid</span>
+                    </div>
+                    <div class="course-name">Spring Boot for Beginners — From Zero to REST API</div>
+                    <div class="course-desc">Build production-ready REST APIs using Spring Boot, JPA, and MySQL from scratch. Perfect for Java developers stepping into backend.</div>
+                </div>
+                <div class="course-header-right">
+                    <div class="course-price">₹999</div>
+                    <span class="lesson-count-badge">3 Lessons</span>
+                </div>
+            </div>
+
+            <div class="lesson-table-wrap">
+                <div class="lesson-table-header">
+                    <span>Lessons in this course</span>
+                    <span>3 total</span>
+                </div>
+
+                <div class="lesson-row">
+                    <div class="lesson-num">1</div>
+                    <div class="lesson-info">
+                        <div class="lesson-name">Introduction to Spring Boot</div>
+                        <div class="lesson-topic">📌 Getting Started</div>
+                        <div class="lesson-desc">Overview of Spring Boot, what it is, why we use it, and how it differs from plain Spring Framework.</div>
+                    </div>
+                    <div class="lesson-right">
+                        <span class="lesson-id-badge">Lesson #1</span>
+                        <a href="https://www.youtube.com/watch?v=example" target="_blank">
+                            <button class="btn-video">▶ Watch Video</button>
+                        </a>
+                    </div>
+                </div>
+
+                <div class="lesson-row">
+                    <div class="lesson-num">2</div>
+                    <div class="lesson-info">
+                        <div class="lesson-name">Spring Dependency Injection</div>
+                        <div class="lesson-topic">📌 Core Concepts</div>
+                        <div class="lesson-desc">Understand @Autowired, @Component, @Service, and @Repository annotations with practical examples.</div>
+                    </div>
+                    <div class="lesson-right">
+                        <span class="lesson-id-badge">Lesson #2</span>
+                        <a href="https://www.youtube.com/watch?v=example2" target="_blank">
+                            <button class="btn-video">▶ Watch Video</button>
+                        </a>
+                    </div>
+                </div>
+
+                <div class="lesson-row">
+                    <div class="lesson-num">3</div>
+                    <div class="lesson-info">
+                        <div class="lesson-name">Building Your First REST API</div>
+                        <div class="lesson-topic">📌 REST &amp; HTTP Methods</div>
+                        <div class="lesson-desc">Create GET, POST, PUT, DELETE endpoints using @RestController and @RequestMapping with Postman testing.</div>
+                    </div>
+                    <div class="lesson-right">
+                        <span class="lesson-id-badge">Lesson #3</span>
+                        <span class="no-video">No video yet</span>
+                    </div>
+                </div>
+
+            </div>
+        </div><!-- /course-block 1 -->
+
+
+        <!-- ── COURSE BLOCK 2 ── -->
+        <div class="course-block">
+            <div class="course-header">
+                <div class="course-icon ci-2">🐍</div>
+                <div class="course-header-info">
+                    <div class="course-badge-row">
+                        <span class="badge badge-id">ID: PY201</span>
+                        <span class="badge badge-free">Free</span>
+                    </div>
+                    <div class="course-name">Python Programming — Complete Beginner's Guide</div>
+                    <div class="course-desc">Learn Python from the ground up — variables, loops, functions, file handling, and mini projects. No prior experience needed.</div>
+                </div>
+                <div class="course-header-right">
+                    <div class="course-price-free">Free</div>
+                    <span class="lesson-count-badge">2 Lessons</span>
+                </div>
+            </div>
+
+            <div class="lesson-table-wrap">
+                <div class="lesson-table-header">
+                    <span>Lessons in this course</span>
+                    <span>2 total</span>
+                </div>
+
+                <div class="lesson-row">
+                    <div class="lesson-num">1</div>
+                    <div class="lesson-info">
+                        <div class="lesson-name">Python Variables and Data Types</div>
+                        <div class="lesson-topic">📌 Python Basics</div>
+                        <div class="lesson-desc">Learn about integers, strings, floats, booleans, and how Python handles types dynamically.</div>
+                    </div>
+                    <div class="lesson-right">
+                        <span class="lesson-id-badge">Lesson #1</span>
+                        <a href="https://www.youtube.com/watch?v=example3" target="_blank">
+                            <button class="btn-video">▶ Watch Video</button>
+                        </a>
+                    </div>
+                </div>
+
+                <div class="lesson-row">
+                    <div class="lesson-num">2</div>
+                    <div class="lesson-info">
+                        <div class="lesson-name">Loops and Conditions in Python</div>
+                        <div class="lesson-topic">📌 Control Flow</div>
+                        <div class="lesson-desc">Master if-else statements, for loops, while loops, and nested conditions with real examples.</div>
+                    </div>
+                    <div class="lesson-right">
+                        <span class="lesson-id-badge">Lesson #2</span>
+                        <a href="https://www.youtube.com/watch?v=example4" target="_blank">
+                            <button class="btn-video">▶ Watch Video</button>
+                        </a>
+                    </div>
+                </div>
+
+            </div>
+        </div><!-- /course-block 2 -->
+
+
+        <!-- ── COURSE BLOCK 3 — No lessons yet (empty state demo) ── -->
+        <div class="course-block">
+            <div class="course-header">
+                <div class="course-icon ci-3">🔐</div>
+                <div class="course-header-info">
+                    <div class="course-badge-row">
+                        <span class="badge badge-id">ID: SEC301</span>
+                        <span class="badge badge-paid">Paid</span>
+                    </div>
+                    <div class="course-name">Advanced Spring Security &amp; JWT Authentication</div>
+                    <div class="course-desc">Secure your Spring Boot APIs with JWT tokens, role-based access control, and OAuth2 integration.</div>
+                </div>
+                <div class="course-header-right">
+                    <div class="course-price">₹1,499</div>
+                    <span class="lesson-count-badge">0 Lessons</span>
+                </div>
+            </div>
+
+            <div class="lesson-table-wrap">
+                <div class="lesson-table-header">
+                    <span>Lessons in this course</span>
+                    <span>0 total</span>
+                </div>
+                <div class="no-lessons">
+                    No lessons added yet. <a href="/add-Lesson">Add the first lesson →</a>
+                </div>
+            </div>
+        </div><!-- /course-block 3 -->
+
+    </div>
+</main>
+
+<footer>
+    <div class="container">
+        <p>© 2026 <a href="/">CourseHub</a> — Built with Spring Boot &amp; Thymeleaf &nbsp;|&nbsp; <a href="/trainer-home">Dashboard</a></p>
+    </div>
+</footer>
+
+</body>
+</html>

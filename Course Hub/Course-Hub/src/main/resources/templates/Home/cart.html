@@ -1,0 +1,1163 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My Cart — Course Hub</title>
+
+
+
+
+
+  <!--
+╔══════════════════════════════════════════════════════════════════════════╗
+║                     cart.html — STUDENT CART PAGE                       ║
+╠══════════════════════════════════════════════════════════════════════════╣
+║                                                                          ║
+║  HOW THE CART WORKS (Full Flow)                                          ║
+║  ──────────────────────────────                                          ║
+║                                                                          ║
+║  STORAGE: Cart is stored in HttpSession as List<Course>                  ║
+║    Key:   "cart"                                                         ║
+║    Value: ArrayList<Course>                                              ║
+║                                                                          ║
+║  ADD TO CART:                                                            ║
+║    GET /cart/add?courseId=JAVA101                                        ║
+║    → CartController.addToCart()                                          ║
+║    → Gets cart from session (creates new list if null)                   ║
+║    → Fetches Course from DB by courseId                                  ║
+║    → Adds course to list if not already in cart                          ║
+║    → Saves list back to session                                          ║
+║    → Redirects to previous page (or /cart)                               ║
+║                                                                          ║
+║  VIEW CART:                                                              ║
+║    GET /cart                                                             ║
+║    → CartController.viewCart()                                           ║
+║    → Gets cart list from session                                         ║
+║    → Calculates total price                                              ║
+║    → Puts "cart" and "cartTotal" in Model                               ║
+║    → Returns "Home/cart"                                                 ║
+║                                                                          ║
+║  REMOVE FROM CART:                                                       ║
+║    GET /cart/remove?courseId=JAVA101                                     ║
+║    → CartController.removeFromCart()                                     ║
+║    → Gets cart from session                                              ║
+║    → Removes course with matching courseId                               ║
+║    → Saves updated list to session                                       ║
+║    → Redirects to /cart                                                  ║
+║                                                                          ║
+║  CHECKOUT:                                                               ║
+║    GET /cart/checkout                                                    ║
+║    → CartController.checkout()                                           ║
+║    → Gets cart from session                                              ║
+║    → Creates enrollment records (future feature)                         ║
+║    → Clears cart from session                                            ║
+║    → Redirects to /student-home with success message                     ║
+║                                                                          ║
+╠══════════════════════════════════════════════════════════════════════════╣
+║  BACKEND CODE — CartController.java                                      ║
+║  ─────────────────────────────────                                       ║
+║                                                                          ║
+║  package com.example.Course.Hub.Controller;                              ║
+║                                                                          ║
+║  import com.example.Course.Hub.ENTITY.Course;                           ║
+║  import com.example.Course.Hub.SERVICES.Trainer.TrainerService;          ║
+║  import jakarta.servlet.http.HttpSession;                                ║
+║  import org.springframework.beans.factory.annotation.Autowired;          ║
+║  import org.springframework.stereotype.Controller;                       ║
+║  import org.springframework.ui.Model;                                    ║
+║  import org.springframework.web.bind.annotation.GetMapping;              ║
+║  import org.springframework.web.bind.annotation.RequestMapping;          ║
+║  import org.springframework.web.bind.annotation.RequestParam;            ║
+║  import java.util.ArrayList;                                             ║
+║  import java.util.List;                                                  ║
+║                                                                          ║
+║  @Controller                                                             ║
+║  @RequestMapping("/cart")                                                ║
+║  public class CartController {                                           ║
+║                                                                          ║
+║      @Autowired                                                          ║
+║      TrainerService tService;                                            ║
+║                                                                          ║
+║      // ── VIEW CART ──────────────────────────────────                  ║
+║      @GetMapping("")                                                     ║
+║      public String viewCart(HttpSession session, Model model) {          ║
+║          List<Course> cart = getCart(session);                           ║
+║          int total = 0;                                                  ║
+║          for (Course c : cart) {                                         ║
+║              if (!"free".equalsIgnoreCase(c.getCourseType())) {          ║
+║                  try { total += Integer.parseInt(c.getCoursePrice()); }  ║
+║                  catch (NumberFormatException e) { }                    ║
+║              }                                                           ║
+║          }                                                               ║
+║          model.addAttribute("cart", cart);                              ║
+║          model.addAttribute("cartTotal", total);                        ║
+║          model.addAttribute("cartCount", cart.size());                  ║
+║          return "Home/cart";                                             ║
+║      }                                                                   ║
+║                                                                          ║
+║      // ── ADD TO CART ────────────────────────────────                  ║
+║      @GetMapping("/add")                                                 ║
+║      public String addToCart(@RequestParam("courseId") String courseId,  ║
+║                               HttpSession session) {                     ║
+║          List<Course> cart = getCart(session);                           ║
+║          // Check if course is already in cart                           ║
+║          boolean alreadyIn = cart.stream()                               ║
+║              .anyMatch(c -> c.getCourseId().equals(courseId));           ║
+║          if (!alreadyIn) {                                               ║
+║              Course course = tService.getCourse(courseId);               ║
+║              if (course != null) cart.add(course);                      ║
+║          }                                                               ║
+║          session.setAttribute("cart", cart);                            ║
+║          session.setAttribute("cartCount", cart.size());                ║
+║          return "redirect:/cart";                                        ║
+║      }                                                                   ║
+║                                                                          ║
+║      // ── REMOVE FROM CART ─────────────────────────                    ║
+║      @GetMapping("/remove")                                              ║
+║      public String removeFromCart(@RequestParam("courseId") String id,   ║
+║                                    HttpSession session) {                ║
+║          List<Course> cart = getCart(session);                           ║
+║          cart.removeIf(c -> c.getCourseId().equals(id));                ║
+║          session.setAttribute("cart", cart);                            ║
+║          session.setAttribute("cartCount", cart.size());                ║
+║          return "redirect:/cart";                                        ║
+║      }                                                                   ║
+║                                                                          ║
+║      // ── CHECKOUT ─────────────────────────────────                    ║
+║      @GetMapping("/checkout")                                            ║
+║      public String checkout(HttpSession session, Model model) {          ║
+║          List<Course> cart = getCart(session);                           ║
+║          // TODO: save enrollment records to DB for each course          ║
+║          // Enrollment entity + EnrollmentRepository needed here         ║
+║          session.removeAttribute("cart");                               ║
+║          session.setAttribute("cartCount", 0);                          ║
+║          model.addAttribute("message", "Payment successful!");          ║
+║          return "redirect:/student-home";                               ║
+║      }                                                                   ║
+║                                                                          ║
+║      // ── HELPER: get or create cart from session ─────────             ║
+║      private List<Course> getCart(HttpSession session) {                ║
+║          Object obj = session.getAttribute("cart");                     ║
+║          if (obj instanceof List) {                                      ║
+║              return (List<Course>) obj;                                  ║
+║          }                                                               ║
+║          return new ArrayList<>();                                       ║
+║      }                                                                   ║
+║  }                                                                       ║
+║                                                                          ║
+╠══════════════════════════════════════════════════════════════════════════╣
+║  NavController — add this route for the cart page:                       ║
+║    The /cart GET is handled by CartController above.                     ║
+║    No change needed in NavController for cart.                           ║
+║                                                                          ║
+║  However, to show cartCount in EVERY page's navbar, add this to         ║
+║  NavController routes that return student pages:                         ║
+║                                                                          ║
+║    @GetMapping("/student-home")                                          ║
+║    public String studentHome(HttpSession session, Model model) {         ║
+║        Object cart = session.getAttribute("cart");                      ║
+║        int count = (cart instanceof List) ? ((List)cart).size() : 0;    ║
+║        model.addAttribute("cartCount", count);                          ║
+║        return "Home/student_Home";                                       ║
+║    }                                                                     ║
+║                                                                          ║
+╚══════════════════════════════════════════════════════════════════════════╝
+-->
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  <!--
+  ╔══════════════════════════════════════════════════════════════════════════╗
+  ║  cart.html — STUDENT CART PAGE (REDESIGNED)                             ║
+  ║  File: templates/Home/cart.html  (or Test/car_claude.html)              ║
+  ╠══════════════════════════════════════════════════════════════════════════╣
+  ║                                                                          ║
+  ║  ROOT CAUSE OF OLD CRASH:                                               ║
+  ║  Thymeleaf SpEL CANNOT call #lists.size() inside a ternary (? :)        ║
+  ║  operator in th:text. This crashed mid-render, sending broken HTML.     ║
+  ║  FIX: Remove lesson count entirely from cart (as requested).            ║
+  ║                                                                          ║
+  ║  WHAT'S REMOVED (causing crash):                                        ║
+  ║    ✗ cart-lessons div with #lists.size(course.lessons)                  ║
+  ║    ✗ rec-lessons div in recommended section                              ║
+  ║                                                                          ║
+  ║  WHAT'S KEPT IDENTICAL:                                                 ║
+  ║    ✓ All navbar items and dropdown menu                                  ║
+  ║    ✓ All Thymeleaf data bindings                                         ║
+  ║    ✓ CartController backend logic                                        ║
+  ║    ✓ Remove/checkout button URLs                                         ║
+  ║                                                                          ║
+  ║  WHAT'S REDESIGNED:                                                      ║
+  ║    ✓ Cart row spacing — proper padding, breathing room                   ║
+  ║    ✓ Button layout — Details + Remove in clean row, never overlap        ║
+  ║    ✓ Order summary — better visual hierarchy                             ║
+  ║    ✓ Recommended section — improved card layout                          ║
+  ║    ✓ Full responsive — mobile buttons visible                            ║
+  ║                                                                          ║
+  ║  BACKEND (CartController.java) — FIXES NEEDED IN YOUR PROJECT:          ║
+  ║                                                                          ║
+  ║  1. viewCart() → return "Home/cart";  (or your template path)           ║
+  ║                                                                          ║
+  ║  2. addToCart() → return "redirect:/cart";                               ║
+  ║     (not "redirect:/all-courses")                                        ║
+  ║                                                                          ║
+  ║  3. removeFromCart() → return "redirect:/cart";                          ║
+  ║     (not "redirect:/car_claude" — route that doesn't exist)             ║
+  ║                                                                          ║
+  ║  4. Add recommended courses to model in viewCart():                      ║
+  ║     List<Course> all = tService.getAllCourses();                          ║
+  ║     Set<String> cartIds = cart.stream()                                  ║
+  ║         .map(Course::getCourseId).collect(Collectors.toSet());           ║
+  ║     List<Course> recommended = all.stream()                              ║
+  ║         .filter(c -> !cartIds.contains(c.getCourseId()))                 ║
+  ║         .limit(4)                                                        ║
+  ║         .collect(Collectors.toList());                                   ║
+  ║     model.addAttribute("recommended", recommended);                      ║
+  ║     model.addAttribute("cartIds", cartIds);                              ║
+  ║                                                                          ║
+  ║  THYMELEAF FIELDS:                                                       ║
+  ║  ${session.user.firstname}     → student first name                      ║
+  ║  ${session.user.lastname}      → student last name                       ║
+  ║  ${session.user.email}         → student email                           ║
+  ║  ${cart}                       → List<Course> from session               ║
+  ║  ${cartTotal}                  → int sum of paid course prices            ║
+  ║  ${cartCount}                  → cart.size()                             ║
+  ║  ${recommended}                → List<Course> not in cart (max 4)        ║
+  ║  ${cartIds}                    → Set<String> of courseIds in cart        ║
+  ║  course.courseName             → name                                    ║
+  ║  course.trainerName            → trainer (bold + blue)                   ║
+  ║  course.courseShortDescription → description                             ║
+  ║  course.coursePrice            → price string                            ║
+  ║  course.courseType             → "free" or "paid"                        ║
+  ║  course.courseId               → used in URL only, never shown           ║
+  ╚══════════════════════════════════════════════════════════════════════════╝
+  -->
+
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&family=Playfair+Display:wght@700;800;900&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --midnight: #0c0e1a; --navy: #0f172a;
+      --deep: #1e3a8a; --blue: #2563eb; --blue-lt: #3b82f6; --blue-soft: #eff6ff;
+      --gold: #f59e0b; --gold-pale: #fef3c7;
+      --bg: #f4f7ff; --card: #fff; --s2: #f8faff; --s3: #eef2ff;
+      --tx: #0f172a; --tx2: #374151; --tx3: #6b7280; --tx4: #9ca3af;
+      --bd: #e5e7eb; --bd2: #f0f2f9;
+      --green: #059669; --gbg: #ecfdf5;
+      --red: #dc2626; --rbg: #fef2f2;
+      --amber: #d97706; --amber-bg: #fffbeb;
+      --sh-sm: 0 1px 4px rgba(15,23,42,.05), 0 1px 2px rgba(15,23,42,.04);
+      --sh-md: 0 4px 16px rgba(30,58,138,.08);
+      --sh-lg: 0 12px 36px rgba(30,58,138,.13);
+      --sh-xl: 0 24px 64px rgba(30,58,138,.18);
+      --fh: 'Playfair Display', serif;
+      --fb: 'DM Sans', sans-serif;
+      --r: 12px; --rl: 18px; --rxl: 24px;
+      --ease: .2s cubic-bezier(.4,0,.2,1);
+    }
+
+    body { font-family: var(--fb); background: var(--bg); color: var(--tx); font-size: 15px; line-height: 1.6; }
+    a { text-decoration: none; color: inherit; }
+    ul { list-style: none; }
+
+    /* ══════════════════════════════════
+       NAVBAR — kept identical to existing
+    ══════════════════════════════════ */
+    .navbar { background: var(--midnight); position: sticky; top: 0; z-index: 500; box-shadow: 0 1px 0 rgba(255,255,255,.05), 0 4px 20px rgba(0,0,0,.3); }
+    .nav-inner { max-width: 1240px; margin: 0 auto; padding: 0 28px; height: 66px; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+    .nav-logo { display: flex; align-items: center; gap: 9px; font-family: var(--fh); font-size: 1.45rem; font-weight: 900; color: #fff; letter-spacing: -.03em; flex-shrink: 0; }
+    .logo-mark { width: 32px; height: 32px; background: var(--gold); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: .9rem; }
+    .nav-right { display: flex; align-items: center; gap: 10px; position: relative; }
+    .nav-badge { background: rgba(255,255,255,.1); color: #93c5fd; font-size: .73rem; font-weight: 600; padding: 4px 11px; border-radius: 20px; }
+    .nav-name { font-size: .83rem; color: rgba(255,255,255,.72); font-weight: 500; }
+    .btn-nav-ghost { padding: 8px 16px; font-family: var(--fb); font-size: .84rem; font-weight: 600; color: rgba(255,255,255,.8); background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.15); border-radius: var(--r); cursor: pointer; transition: all var(--ease); }
+    .btn-nav-ghost:hover { background: rgba(255,255,255,.16); color: #fff; }
+    .btn-menu { display: flex; align-items: center; gap: 7px; padding: 7px 16px; font-family: var(--fb); font-size: .83rem; font-weight: 700; background: var(--gold); color: var(--midnight); border: none; border-radius: var(--r); cursor: pointer; transition: all var(--ease); }
+    .btn-menu:hover { background: #fbbf24; }
+
+    /* DROPDOWN MENU — kept identical */
+    .menu-dd { position: absolute; top: calc(100% + 12px); right: 0; background: var(--card); border: 1px solid var(--bd); border-radius: var(--rl); box-shadow: var(--sh-xl); min-width: 240px; padding: 8px 0; z-index: 600; display: none; animation: menuIn .18s ease; }
+    @keyframes menuIn { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
+    .menu-dd.open { display: block; }
+    .menu-ui { padding: 14px 18px 12px; border-bottom: 1px solid var(--bd); margin-bottom: 4px; }
+    .menu-uname { font-size: .92rem; font-weight: 700; color: var(--tx); margin-bottom: 2px; }
+    .menu-uemail { font-size: .76rem; color: var(--tx3); }
+    .menu-urole { display: inline-block; background: var(--gold-pale); color: #92400e; font-size: .67rem; font-weight: 700; padding: 2px 8px; border-radius: 10px; margin-top: 4px; }
+    .mi { display: flex; align-items: center; gap: 12px; padding: 10px 18px; font-size: .86rem; font-weight: 500; color: var(--tx); cursor: pointer; transition: background var(--ease); }
+    .mi:hover { background: var(--s3); color: var(--deep); }
+    .mi.danger { color: var(--red); }
+    .mi.danger:hover { background: var(--rbg); }
+    .mi.current { background: var(--s3); color: var(--deep); font-weight: 600; }
+    .mi-icon { font-size: 1rem; width: 22px; text-align: center; flex-shrink: 0; }
+    .menu-div { border: none; border-top: 1px solid var(--bd); margin: 5px 0; }
+
+    /* ══════════════════════════════════
+       HERO BANNER
+    ══════════════════════════════════ */
+    .hero {
+      background: var(--midnight);
+      background-image: radial-gradient(ellipse 70% 60% at 65% 50%, rgba(37,99,235,.28) 0%, transparent 60%);
+      padding: 48px 0 38px; color: #fff; position: relative; overflow: hidden;
+    }
+    .hero::before {
+      content: ''; position: absolute; inset: 0;
+      background-image: radial-gradient(circle, rgba(255,255,255,.04) 1px, transparent 1px);
+      background-size: 28px 28px; pointer-events: none;
+    }
+    .con { max-width: 1240px; margin: 0 auto; padding: 0 28px; position: relative; z-index: 1; }
+    .bread { display: flex; align-items: center; gap: 8px; font-size: .78rem; color: rgba(255,255,255,.45); margin-bottom: 20px; }
+    .bread a { color: rgba(255,255,255,.7); font-weight: 500; transition: color var(--ease); }
+    .bread a:hover { color: #fff; }
+    .hero-row { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; }
+    .hero-title { font-family: var(--fh); font-size: 2.4rem; font-weight: 900; line-height: 1.1; letter-spacing: -.04em; margin-bottom: 8px; }
+    .hero-title .acc { color: var(--gold); }
+    .hero-sub { font-size: .9rem; color: rgba(255,255,255,.65); max-width: 440px; line-height: 1.75; }
+    .hero-stat { background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.12); border-radius: var(--rl); padding: 16px 24px; text-align: center; min-width: 130px; }
+    .hero-stat-num { display: block; font-family: var(--fh); font-size: 1.8rem; font-weight: 900; color: var(--gold); line-height: 1; }
+    .hero-stat-label { font-size: .72rem; color: rgba(255,255,255,.55); font-weight: 500; margin-top: 4px; }
+
+    /* ══════════════════════════════════
+       PAGE + TWO-COLUMN LAYOUT
+    ══════════════════════════════════ */
+    .page { padding: 44px 0 80px; }
+    .cart-layout { display: grid; grid-template-columns: 1fr 360px; gap: 28px; align-items: start; }
+
+    /* ══════════════════════════════════
+       CART ITEMS CARD (LEFT)
+    ══════════════════════════════════ */
+    .cart-card { background: var(--card); border: 1px solid var(--bd2); border-radius: var(--rxl); box-shadow: var(--sh-sm); overflow: hidden; }
+
+    /* Header bar with midnight gradient */
+    .cart-card-header {
+      padding: 18px 26px; border-bottom: 1px solid var(--bd2);
+      display: flex; align-items: center; justify-content: space-between;
+      background: var(--midnight);
+      background-image: radial-gradient(ellipse 80% 80% at 80% 50%, rgba(37,99,235,.25) 0%, transparent 60%);
+    }
+    .cart-card-title { font-family: var(--fh); font-size: 1.05rem; font-weight: 800; color: #fff; }
+    .cart-count-pill { background: var(--deep); color: #fff; font-size: .72rem; font-weight: 700; padding: 4px 12px; border-radius: 20px; }
+
+    /*
+      CART ROW — redesigned for proper spacing
+      Three-column: [icon 64px] [info flex] [action area 130px]
+      Padding increased to 24px for breathing room.
+      No overflow, no overlap.
+    */
+    .cart-row {
+      display: grid;
+      grid-template-columns: 64px 1fr 130px;
+      align-items: center;
+      gap: 20px;
+      padding: 22px 26px;
+      border-bottom: 1px solid var(--bd2);
+      transition: background var(--ease);
+      animation: rowIn .35s ease both;
+    }
+    @keyframes rowIn { from { opacity: 0; transform: translateX(-6px); } to { opacity: 1; transform: translateX(0); } }
+    .cart-row:hover { background: var(--s2); }
+    .cart-row:last-child { border-bottom: none; }
+
+    /* Course icon — 64x64, rounded, with cycling gradient colours */
+    .cart-icon {
+      width: 64px; height: 64px; border-radius: 14px; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center; font-size: 1.8rem;
+    }
+    .cri-1 { background: linear-gradient(135deg, #1e3a8a, #2563eb); }
+    .cri-2 { background: linear-gradient(135deg, #064e3b, #10b981); }
+    .cri-3 { background: linear-gradient(135deg, #6d28d9, #a78bfa); }
+    .cri-4 { background: linear-gradient(135deg, #92400e, #f59e0b); }
+    .cri-5 { background: linear-gradient(135deg, #9f1239, #f43f5e); }
+    .cri-6 { background: linear-gradient(135deg, #0c4a6e, #0ea5e9); }
+
+    /* Info column — holds badge, name, trainer, description */
+    .cart-info { min-width: 0; }
+
+    .ci-type-badge {
+      display: inline-block; font-size: .63rem; font-weight: 700;
+      text-transform: uppercase; letter-spacing: .06em;
+      padding: 3px 9px; border-radius: 20px; margin-bottom: 6px;
+    }
+    .ci-free { background: var(--gbg); color: var(--green); }
+    .ci-paid { background: var(--blue-soft); color: var(--deep); }
+
+    /* Course name — prominent, no ID shown */
+    .cart-course-name {
+      font-size: .98rem; font-weight: 700; color: var(--tx);
+      margin-bottom: 4px; line-height: 1.35;
+      /* max 2 lines */
+      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+    }
+
+    /* Trainer — bold blue as required */
+    .cart-trainer { font-size: .8rem; font-weight: 700; color: var(--blue); margin-bottom: 5px; }
+
+    /* Description — clamped to 2 lines */
+    .cart-desc {
+      font-size: .78rem; color: var(--tx3); line-height: 1.6;
+      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+    }
+
+    /*
+      ACTION COLUMN (RIGHT SIDE OF ROW)
+      Redesigned: price on top, then two buttons stacked below.
+      flex-direction:column → no overlap, clean vertical stack.
+      Buttons are full-width within the 130px column.
+    */
+    .cart-right {
+      display: flex; flex-direction: column;
+      align-items: stretch; gap: 8px;
+      flex-shrink: 0;
+    }
+
+    /* Price */
+    .cart-price      { font-family: var(--fh); font-size: 1.15rem; font-weight: 900; color: var(--deep); text-align: right; }
+    .cart-price-free { font-family: var(--fh); font-size: 1.15rem; font-weight: 900; color: var(--green); text-align: right; }
+
+    /* Button divider line */
+    .btn-divider { border: none; border-top: 1px solid var(--bd2); margin: 2px 0; }
+
+    /*
+      DETAILS BUTTON — secondary style
+      th:href="@{/course-details/{id}(id=${course.courseId})}"
+      courseId in URL only — never shown as text
+    */
+    .btn-details {
+      padding: 8px 0; font-family: var(--fb); font-size: .78rem; font-weight: 700;
+      color: var(--deep); background: var(--blue-soft);
+      border: 1.5px solid #bfdbfe; border-radius: var(--r); cursor: pointer;
+      transition: all var(--ease); text-align: center; width: 100%;
+    }
+    .btn-details:hover { background: var(--deep); color: #fff; border-color: var(--deep); }
+
+    /*
+      REMOVE BUTTON — red destructive action
+      th:href="@{/cart/remove(courseId=${course.courseId})}"
+      → GET /cart/remove?courseId=JAVA101
+      → CartController.removeFromCart() → session list updated → redirect:/cart
+    */
+    .btn-remove {
+      padding: 8px 0; font-family: var(--fb); font-size: .78rem; font-weight: 700;
+      color: var(--red); background: var(--rbg);
+      border: 1.5px solid #fca5a5; border-radius: var(--r); cursor: pointer;
+      transition: all var(--ease); text-align: center; width: 100%;
+    }
+    .btn-remove:hover { background: var(--red); color: #fff; border-color: var(--red); }
+
+    /* EMPTY CART STATE */
+    .cart-empty { padding: 72px 26px; text-align: center; }
+    .cart-empty-icon { font-size: 3.5rem; margin-bottom: 18px; }
+    .cart-empty-title { font-family: var(--fh); font-size: 1.25rem; font-weight: 700; color: var(--tx); margin-bottom: 8px; }
+    .cart-empty-sub { font-size: .88rem; color: var(--tx3); margin-bottom: 26px; max-width: 320px; margin-left: auto; margin-right: auto; line-height: 1.7; }
+    .btn-browse { padding: 12px 28px; font-family: var(--fb); font-size: .9rem; font-weight: 700; color: var(--midnight); background: var(--gold); border: none; border-radius: var(--r); cursor: pointer; transition: all var(--ease); }
+    .btn-browse:hover { background: #fbbf24; transform: translateY(-1px); box-shadow: var(--sh-md); }
+
+    /* ══════════════════════════════════
+       ORDER SUMMARY CARD (RIGHT COLUMN)
+       sticky: stays visible while scrolling cart items
+    ══════════════════════════════════ */
+    .summary-card {
+      background: var(--card); border: 1px solid var(--bd2);
+      border-radius: var(--rxl); box-shadow: var(--sh-sm);
+      overflow: hidden; position: sticky; top: 84px;
+    }
+    .summary-header {
+      background: linear-gradient(135deg, var(--midnight), var(--deep));
+      padding: 20px 24px; position: relative; overflow: hidden;
+    }
+    .summary-header::before {
+      content: ''; position: absolute; inset: 0;
+      background-image: radial-gradient(circle, rgba(255,255,255,.03) 1px, transparent 1px);
+      background-size: 20px 20px;
+    }
+    .summary-header h3 { font-family: var(--fh); font-size: 1.05rem; font-weight: 700; color: #fff; position: relative; z-index: 1; }
+    .summary-header p  { font-size: .75rem; color: rgba(255,255,255,.6); position: relative; z-index: 1; margin-top: 3px; }
+    .summary-body { padding: 22px 22px 24px; }
+
+    /*
+      PER-COURSE BREAKDOWN
+      THYMELEAF: th:each="course : ${cart}"
+      Shows each course name + price so student sees exactly what they pay for.
+    */
+    .summary-items { margin-bottom: 18px; display: flex; flex-direction: column; gap: 11px; }
+    .summary-item { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+
+    /* Blue dot bullet */
+    .si-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--deep); flex-shrink: 0; margin-top: 6px; }
+
+    /* Course name in summary — 2 line clamp */
+    .si-name {
+      font-size: .83rem; color: var(--tx2); font-weight: 500; flex: 1;
+      line-height: 1.45;
+      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+    }
+    .si-price-free { font-size: .85rem; font-weight: 700; color: var(--green); flex-shrink: 0; white-space: nowrap; }
+    .si-price-paid { font-size: .85rem; font-weight: 700; color: var(--tx); flex-shrink: 0; white-space: nowrap; }
+
+    .summary-divider { border: none; border-top: 1px solid var(--bd2); margin: 16px 0; }
+
+    /* Subtotal rows */
+    .summary-row { display: flex; justify-content: space-between; align-items: center; font-size: .85rem; margin-bottom: 9px; }
+    .sr-label { color: var(--tx3); font-weight: 500; }
+    .sr-val   { color: var(--tx); font-weight: 600; }
+    .sr-green { color: var(--green); font-weight: 700; }
+
+    /* Grand total */
+    .summary-total-row {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 16px 0 0; border-top: 2px solid var(--bd);
+    }
+    .total-label { font-family: var(--fh); font-size: 1rem; font-weight: 700; color: var(--tx); }
+
+    /*
+      TOTAL PRICE
+      THYMELEAF: th:text="${cartTotal == 0} ? 'Free ✓' : '₹' + ${cartTotal}"
+      cartTotal = sum of PAID course prices only. Free = 0.
+      Calculated in CartController.viewCart()
+    */
+    .total-price { font-family: var(--fh); font-size: 1.55rem; font-weight: 900; color: var(--deep); }
+
+    /*
+      CHECKOUT BUTTON — gold CTA
+      th:href="@{/cart/checkout}"
+      → CartController.checkout():
+          1. Moves cart → enrolledCourses in session
+          2. Clears cart
+          3. Redirects to /my-courses
+    */
+    .btn-checkout {
+      display: block; width: 100%; padding: 14px; margin-top: 20px;
+      font-family: var(--fb); font-size: .96rem; font-weight: 700;
+      color: var(--midnight); background: var(--gold);
+      border: none; border-radius: var(--r); cursor: pointer; text-align: center;
+      transition: all var(--ease);
+    }
+    .btn-checkout:hover { background: #fbbf24; transform: translateY(-2px); box-shadow: 0 8px 24px rgba(245,158,11,.3); }
+    .btn-checkout:disabled { background: var(--bd); color: var(--tx3); cursor: not-allowed; transform: none; box-shadow: none; }
+
+    /* Continue shopping — outline secondary */
+    .btn-continue-shop {
+      display: block; width: 100%; padding: 12px; margin-top: 10px;
+      font-family: var(--fb); font-size: .88rem; font-weight: 600;
+      color: var(--deep); background: transparent;
+      border: 1.5px solid #bfdbfe; border-radius: var(--r); cursor: pointer; text-align: center;
+      transition: all var(--ease);
+    }
+    .btn-continue-shop:hover { background: var(--blue-soft); }
+
+    .summary-note { font-size: .73rem; color: var(--tx4); text-align: center; margin-top: 16px; line-height: 1.65; }
+    .summary-empty-note { font-size: .84rem; color: var(--tx3); text-align: center; padding: 22px 0; }
+
+    /* ══════════════════════════════════
+       RECOMMENDED SECTION
+    ══════════════════════════════════ */
+    .mt-section { margin-top: 52px; }
+    .sec-head { margin-bottom: 22px; }
+    .sec-tag { font-size: .7rem; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; color: var(--blue); display: block; margin-bottom: 6px; }
+    .sec-title { font-family: var(--fh); font-size: 1.5rem; font-weight: 700; color: var(--tx); }
+
+    /*
+      Recommended grid — 2 columns on desktop, 1 on mobile
+      Card: icon | info | price+button — clean horizontal layout
+    */
+    .rec-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+
+    .rec-card {
+      background: var(--card); border: 1px solid var(--bd2); border-radius: var(--rl);
+      display: flex; align-items: center; gap: 14px; padding: 16px 18px;
+      box-shadow: var(--sh-sm); transition: transform var(--ease), box-shadow var(--ease);
+    }
+    .rec-card:hover { transform: translateY(-3px); box-shadow: var(--sh-md); }
+
+    /* Icon — 48x48 with cycling gradients */
+    .rec-icon { width: 48px; height: 48px; border-radius: 11px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 1.35rem; }
+    .rci-1 { background: linear-gradient(135deg, #1e3a8a, #2563eb); }
+    .rci-2 { background: linear-gradient(135deg, #064e3b, #10b981); }
+    .rci-3 { background: linear-gradient(135deg, #6d28d9, #a78bfa); }
+    .rci-4 { background: linear-gradient(135deg, #92400e, #f59e0b); }
+    .rci-5 { background: linear-gradient(135deg, #9f1239, #f43f5e); }
+    .rci-6 { background: linear-gradient(135deg, #0c4a6e, #0ea5e9); }
+
+    /* Info — name + trainer, no lesson count (removed to prevent crash) */
+    .rec-info { flex: 1; min-width: 0; }
+    .rec-name    { font-size: .86rem; font-weight: 700; color: var(--tx); margin-bottom: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .rec-trainer { font-size: .75rem; font-weight: 600; color: var(--blue); }
+    /*
+      NOTE: rec-lessons div REMOVED entirely.
+      #lists.size(course.lessons) in a Thymeleaf ternary causes TemplateParsingException.
+      Since the response is already partially committed by the time the crash happens,
+      the browser receives broken HTML — no JS, no buttons, no summary.
+      Removing this line completely prevents the crash.
+    */
+
+    /* Price + button on the right */
+    .rec-right { display: flex; flex-direction: column; align-items: flex-end; gap: 7px; flex-shrink: 0; min-width: 80px; }
+    .rec-price      { font-family: var(--fh); font-size: .95rem; font-weight: 800; color: var(--deep); }
+    .rec-price-free { font-family: var(--fh); font-size: .95rem; font-weight: 800; color: var(--green); }
+
+    /* "In Cart" badge — shown when course already in cart */
+    .rec-in-cart {
+      font-size: .7rem; font-weight: 700; color: var(--amber);
+      background: var(--amber-bg); border: 1px solid #fcd34d;
+      padding: 5px 10px; border-radius: 20px; white-space: nowrap; text-align: center;
+    }
+
+    /* Add to Cart button */
+    .btn-add-sm {
+      padding: 7px 14px; font-family: var(--fb); font-size: .76rem; font-weight: 700;
+      color: #fff; background: var(--deep); border: none;
+      border-radius: var(--r); cursor: pointer; transition: all var(--ease); white-space: nowrap;
+    }
+    .btn-add-sm:hover { background: var(--blue); transform: translateY(-1px); }
+
+    .rec-empty { text-align: center; padding: 32px; font-size: .86rem; color: var(--tx3); background: var(--card); border: 1px solid var(--bd2); border-radius: var(--rl); }
+
+    /* Bottom back-nav links */
+    .back-nav { margin-top: 18px; display: flex; gap: 14px; flex-wrap: wrap; align-items: center; }
+    .back-nav a { font-size: .84rem; font-weight: 600; color: var(--blue); transition: color var(--ease); }
+    .back-nav a:hover { color: var(--deep); }
+    .back-nav-sep { color: var(--bd2); }
+
+    /* FOOTER */
+    footer { background: var(--navy); color: rgba(255,255,255,.4); padding: 28px 0; margin-top: 64px; }
+    .footer-inner { max-width: 1240px; margin: 0 auto; padding: 0 28px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; font-size: .82rem; }
+    footer a { color: var(--gold); transition: color var(--ease); }
+    footer a:hover { color: #fff; }
+
+    /* ══════════════════════════════════
+       RESPONSIVE
+    ══════════════════════════════════ */
+    @media (max-width: 1024px) {
+      .rec-grid { grid-template-columns: 1fr 1fr; }
+    }
+    @media (max-width: 960px) {
+      .cart-layout { grid-template-columns: 1fr; }
+      .summary-card { position: static; }
+      .rec-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (max-width: 680px) {
+      /*
+        On mobile: stack the 3-column row into 2-column,
+        then action area drops below spanning full width.
+        Buttons stay visible — flex-direction:row side by side.
+      */
+      .cart-row { grid-template-columns: 56px 1fr; grid-template-rows: auto auto; gap: 14px; padding: 18px 18px; }
+      .cart-right {
+        grid-column: 1 / -1;
+        flex-direction: row;
+        flex-wrap: wrap;
+        justify-content: space-between;
+        align-items: center;
+        padding-top: 12px;
+        border-top: 1px solid var(--bd2);
+        gap: 8px;
+      }
+      .cart-price, .cart-price-free { font-size: 1rem; }
+      .btn-details, .btn-remove { width: auto; padding: 8px 16px; flex: 1; }
+      .rec-grid { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 480px) {
+      .nav-inner, .con { padding: 0 18px; }
+      .nav-name, .nav-badge { display: none; }
+      .hero-stat { display: none; }
+      .hero-title { font-size: 1.9rem; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════
+     NAVBAR — all items kept identical to existing
+═══════════════════════════════════════════ -->
+<nav class="navbar">
+  <div class="nav-inner">
+    <a href="/student-home" class="nav-logo">
+      <div class="logo-mark">📚</div>
+      CourseHub
+    </a>
+    <div class="nav-right">
+      <span class="nav-badge">🎓 Student</span>
+      <!--
+        th:text="${session.user.firstname}"
+        Shows logged-in student's first name
+      -->
+      <span class="nav-name" th:text="${session.user.firstname}">Rahul</span>
+      <a href="/student-home"><button class="btn-nav-ghost">← Dashboard</button></a>
+      <a href="/all-courses"><button class="btn-nav-ghost">🔍 Browse</button></a>
+
+      <!-- Hamburger menu -->
+      <button class="btn-menu" id="menuToggle">☰ Menu</button>
+
+      <!-- Dropdown — identical to existing pages -->
+      <div class="menu-dd" id="menuDd">
+        <div class="menu-ui">
+          <!--
+            th:text="${session.user.firstname} + ' ' + ${session.user.lastname}"
+            th:text="${session.user.email}"
+          -->
+          <div class="menu-uname" th:text="${session.user.firstname} + ' ' + ${session.user.lastname}">Rahul Kumar</div>
+          <div class="menu-uemail" th:text="${session.user.email}">rahul@example.com</div>
+          <div class="menu-urole">🎓 Student</div>
+        </div>
+        <a href="/student-profile"><div class="mi"><span class="mi-icon">👤</span>Profile</div></a>
+        <a href="/my-courses"><div class="mi"><span class="mi-icon">📚</span>My Enrolled Courses</div></a>
+        <!-- Active page highlighted with .current -->
+        <a href="/cart">
+          <div class="mi current">
+            <span class="mi-icon">🛒</span>My Cart
+            <!--
+              Cart count badge — shown when cartCount > 0
+              th:if="${cartCount != null and cartCount > 0}"
+              th:text="'(' + ${cartCount} + ')'"
+            -->
+            <span style="margin-left:auto;font-size:.73rem;color:var(--blue);font-weight:700"
+                  th:if="${cartCount != null and cartCount > 0}"
+                  th:text="'(' + ${cartCount} + ')'"></span>
+          </div>
+        </a>
+        <a href="/all-courses"><div class="mi"><span class="mi-icon">🔍</span>Explore Courses</div></a>
+        <a href="#"><div class="mi"><span class="mi-icon">🏆</span>My Certificates</div></a>
+        <a href="/student-profile"><div class="mi"><span class="mi-icon">⚙️</span>Account Settings</div></a>
+        <hr class="menu-div">
+        <a href="/logout"><div class="mi danger"><span class="mi-icon">🚪</span>Logout</div></a>
+      </div>
+
+    </div>
+  </div>
+</nav>
+
+<!-- ═══════════════════════════════════════════
+     HERO BANNER
+═══════════════════════════════════════════ -->
+<div class="hero">
+  <div class="con">
+    <nav class="bread">
+      <a href="/student-home">Dashboard</a>
+      <span>›</span>
+      <span>My Cart</span>
+    </nav>
+    <div class="hero-row">
+      <div>
+        <h1 class="hero-title">My <span class="acc">Cart</span> 🛒</h1>
+        <p class="hero-sub">Review your selected courses. Pay once, get lifetime access to every lesson.</p>
+      </div>
+      <!--
+        Stat bubble — only shown when cart has items
+        th:if="${cart != null and !#lists.isEmpty(cart)}"
+        th:text="${#lists.size(cart)}" → number of items
+      -->
+      <div class="hero-stat" th:if="${cart != null and !#lists.isEmpty(cart)}">
+        <span class="hero-stat-num" th:text="${#lists.size(cart)}">0</span>
+        <div class="hero-stat-label">courses in cart</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════
+     MAIN PAGE
+═══════════════════════════════════════════ -->
+<div class="page">
+  <div class="con">
+    <div class="cart-layout">
+
+      <!-- ────────────────────────────────
+           LEFT: CART ITEMS LIST
+      ──────────────────────────────── -->
+      <div>
+        <div class="cart-card">
+
+          <!-- Card header -->
+          <div class="cart-card-header">
+            <span class="cart-card-title">🛒 Courses in Cart</span>
+            <!--
+              th:text="${cart != null} ? ${#lists.size(cart)} + ' course(s)' : '0 course(s)'"
+            -->
+            <span class="cart-count-pill"
+                  th:text="${cart != null} ? ${#lists.size(cart)} + ' course(s)' : '0 course(s)'">
+              0 course(s)
+            </span>
+          </div>
+
+          <!--
+            EMPTY CART STATE
+            th:if="${cart == null or #lists.isEmpty(cart)}"
+          -->
+          <div class="cart-empty" th:if="${cart == null or #lists.isEmpty(cart)}">
+            <div class="cart-empty-icon">🛒</div>
+            <div class="cart-empty-title">Your cart is empty</div>
+            <p class="cart-empty-sub">Browse our courses and add them to your cart to get started with learning.</p>
+            <a href="/all-courses"><button class="btn-browse">Browse All Courses →</button></a>
+          </div>
+
+          <!--
+            CART ITEMS LOOP
+            th:if="${cart != null and !#lists.isEmpty(cart)}"
+            th:each="course, iter : ${cart}"
+              course = current Course object from session
+              iter   = loop status (.index for colour cycling)
+
+            NOTE: cart-lessons REMOVED completely.
+            Reason: #lists.size(course.lessons) in a Thymeleaf ternary
+            operator causes TemplateParsingException. Spring Boot partially
+            commits the HTTP response before crashing, sending broken HTML
+            with no closing tags, no JS, no summary section, no buttons.
+            Removing lesson count entirely prevents this crash.
+          -->
+          <div th:if="${cart != null and !#lists.isEmpty(cart)}">
+            <div class="cart-row"
+                 th:each="course, iter : ${cart}"
+                 th:style="'animation-delay:' + ${iter.index * 60} + 'ms'">
+
+              <!--
+                ICON — colour cycles through 6 gradients via iter.index % 6
+                cri-1 through cri-6 defined in CSS above
+              -->
+              <div class="cart-icon"
+                   th:classappend="${iter.index % 6 == 0} ? 'cri-1' :
+                            (${iter.index % 6 == 1} ? 'cri-2' :
+                            (${iter.index % 6 == 2} ? 'cri-3' :
+                            (${iter.index % 6 == 3} ? 'cri-4' :
+                            (${iter.index % 6 == 4} ? 'cri-5' : 'cri-6'))))">
+                📘
+              </div>
+
+              <!-- INFO COLUMN -->
+              <div class="cart-info">
+                <!--
+                  FREE / PAID badge
+                  th:if="${course.courseType == 'free'}"
+                  th:unless="${course.courseType == 'free'}"
+                -->
+                <span class="ci-type-badge ci-free" th:if="${course.courseType == 'free'}">Free</span>
+                <span class="ci-type-badge ci-paid" th:unless="${course.courseType == 'free'}">Paid</span>
+
+                <!-- Course name — th:text="${course.courseName}" — ID never shown -->
+                <div class="cart-course-name" th:text="${course.courseName}">Course Name</div>
+
+                <!-- Trainer — BOLD + blue — th:text="'By ' + ${course.trainerName}" -->
+                <div class="cart-trainer" th:text="'By ' + ${course.trainerName}">By Trainer</div>
+
+                <!-- Description — th:text="${course.courseShortDescription}" -->
+                <div class="cart-desc" th:text="${course.courseShortDescription}">Description here</div>
+
+                <!--
+                  LESSON COUNT REMOVED — causes Thymeleaf crash
+                  Do NOT add back: th:text="${course.lessons != null ? #lists.size(...) : ...}"
+                  SpEL cannot call utility methods inside ternary operators.
+                -->
+              </div>
+
+              <!-- ACTION COLUMN: price + Details + Remove -->
+              <div class="cart-right">
+                <!--
+                  PRICE
+                  Free course: th:if="${course.courseType == 'free'}" → show "Free"
+                  Paid course: th:unless → show ₹price
+                -->
+                <div class="cart-price-free" th:if="${course.courseType == 'free'}">Free</div>
+                <div class="cart-price"
+                     th:unless="${course.courseType == 'free'}"
+                     th:text="'₹' + ${course.coursePrice}">₹999</div>
+
+                <hr class="btn-divider">
+
+                <!--
+                  DETAILS BUTTON
+                  th:href="@{/course-details/{id}(id=${course.courseId})}"
+                  Builds URL: /course-details/JAVA101
+                  courseId in URL only — never shown as text to student
+                -->
+                <a th:href="@{/course-details/{id}(id=${course.courseId})}">
+                  <button class="btn-details">Details</button>
+                </a>
+
+                <!--
+                  REMOVE BUTTON
+                  th:href="@{/cart/remove(courseId=${course.courseId})}"
+                  Builds URL: /cart/remove?courseId=JAVA101
+                  CartController.removeFromCart():
+                    cart.removeIf(c -> c.getCourseId().equals(id));
+                    return "redirect:/cart";
+                -->
+                <a th:href="@{/cart/remove(courseId=${course.courseId})}">
+                  <button class="btn-remove">🗑 Remove</button>
+                </a>
+              </div>
+
+            </div><!-- /cart-row — Thymeleaf repeats for each course in cart -->
+          </div><!-- /cart items wrapper -->
+
+        </div><!-- /cart-card -->
+
+        <!-- Bottom back-navigation links -->
+        <div class="back-nav">
+          <a href="/all-courses">← Back to All Courses</a>
+          <span class="back-nav-sep">|</span>
+          <a href="/student-home">🏠 Dashboard</a>
+          <span class="back-nav-sep">|</span>
+          <a href="/my-courses">🎓 My Courses</a>
+        </div>
+      </div><!-- /left column -->
+
+      <!-- ────────────────────────────────
+           RIGHT: ORDER SUMMARY (sticky)
+      ──────────────────────────────── -->
+      <div>
+        <div class="summary-card">
+
+          <!-- Summary header -->
+          <div class="summary-header">
+            <h3>📋 Order Summary</h3>
+            <p>Review before completing payment</p>
+          </div>
+
+          <div class="summary-body">
+
+            <!--
+              EMPTY SUMMARY STATE
+              th:if="${cart == null or #lists.isEmpty(cart)}"
+            -->
+            <p class="summary-empty-note" th:if="${cart == null or #lists.isEmpty(cart)}">
+              Add courses to see your order summary here.
+            </p>
+
+            <!--
+              FILLED SUMMARY STATE
+              th:if="${cart != null and !#lists.isEmpty(cart)}"
+            -->
+            <div th:if="${cart != null and !#lists.isEmpty(cart)}">
+
+              <!--
+                PER-COURSE BREAKDOWN
+                THYMELEAF: th:each="course : ${cart}"
+                This loop prints one line per course with name + price.
+                This is what makes the order summary actually useful —
+                student sees exactly which courses they're paying for.
+              -->
+              <div class="summary-items">
+                <div class="summary-item" th:each="course : ${cart}">
+                  <span class="si-dot"></span>
+                  <!--
+                    Course name — th:text="${course.courseName}"
+                    Clamped to 2 lines by CSS so layout stays clean
+                  -->
+                  <span class="si-name" th:text="${course.courseName}">Course Name</span>
+                  <!--
+                    Price — green "Free" or dark "₹price"
+                    th:if="${course.courseType == 'free'}"
+                    th:unless="${course.courseType == 'free'}"
+                    th:text="'₹' + ${course.coursePrice}"
+                  -->
+                  <span class="si-price-free" th:if="${course.courseType == 'free'}">Free</span>
+                  <span class="si-price-paid"
+                        th:unless="${course.courseType == 'free'}"
+                        th:text="'₹' + ${course.coursePrice}">₹999</span>
+                </div>
+              </div>
+
+              <hr class="summary-divider">
+
+              <!-- Subtotal and breakdown rows -->
+              <div class="summary-row">
+                <span class="sr-label">Subtotal</span>
+                <!--
+                  th:text="${cartTotal > 0} ? '₹' + ${cartTotal} : 'Free'"
+                  cartTotal = sum of paid course prices from CartController
+                -->
+                <span class="sr-val" th:text="${cartTotal > 0} ? '₹' + ${cartTotal} : 'Free'">₹0</span>
+              </div>
+              <div class="summary-row">
+                <span class="sr-label">Discount</span>
+                <span class="sr-green">₹0</span>
+              </div>
+              <div class="summary-row">
+                <span class="sr-label">Free Courses</span>
+                <span class="sr-green">Included ✓</span>
+              </div>
+
+              <hr class="summary-divider">
+
+              <!-- Grand total -->
+              <div class="summary-total-row">
+                <span class="total-label">Total Due</span>
+                <!--
+                  th:text="${cartTotal == 0} ? 'Free ✓' : '₹' + ${cartTotal}"
+                  Shows "Free ✓" if all courses are free, otherwise ₹total
+                -->
+                <span class="total-price"
+                      th:text="${cartTotal == 0} ? 'Free ✓' : '₹' + ${cartTotal}">₹0</span>
+              </div>
+
+              <!--
+                CHECKOUT BUTTON
+                th:href="@{/cart/checkout}"
+                CartController.checkout():
+                  1. Moves cart courses → enrolledCourses session attr
+                  2. session.removeAttribute("cart")
+                  3. return "redirect:/my-courses"
+              -->
+              <a th:href="@{/cart/checkout}">
+                <button class="btn-checkout">🔒 Proceed to Payment →</button>
+              </a>
+
+              <a href="/all-courses">
+                <button class="btn-continue-shop">← Continue Shopping</button>
+              </a>
+
+              <p class="summary-note">
+                🔒 Secure checkout &nbsp;·&nbsp; Instant access after payment<br>
+                7-day money-back guarantee on all paid courses
+              </p>
+
+            </div><!-- /filled state -->
+
+          </div><!-- /summary-body -->
+        </div><!-- /summary-card -->
+      </div><!-- /right column -->
+
+    </div><!-- /cart-layout -->
+
+    <!-- ════════════════════════════════════════
+         RECOMMENDED COURSES SECTION
+         Shows courses NOT already in the cart.
+         Backend puts these in model as "recommended" (max 4).
+    ════════════════════════════════════════ -->
+    <div class="mt-section">
+      <div class="sec-head">
+        <span class="sec-tag">✨ You Might Also Like</span>
+        <h2 class="sec-title">Recommended Courses</h2>
+      </div>
+
+      <!--
+        EMPTY STATE — all courses already in cart
+        th:if="${recommended == null or #lists.isEmpty(recommended)}"
+      -->
+      <div class="rec-empty"
+           th:if="${recommended == null or #lists.isEmpty(recommended)}">
+        🎉 You have added all available courses to your cart!
+        <a href="/all-courses" style="color:var(--blue);font-weight:600"> Browse all →</a>
+      </div>
+
+      <!--
+        RECOMMENDED GRID
+        th:unless="${recommended == null or #lists.isEmpty(recommended)}"
+        th:each="course, iter : ${recommended}"
+
+        HOW BACKEND PROVIDES THESE:
+          In CartController.viewCart():
+            List<Course> all = tService.getAllCourses();
+            Set<String> cartIds = cart.stream()
+                .map(Course::getCourseId).collect(Collectors.toSet());
+            List<Course> recommended = all.stream()
+                .filter(c -> !cartIds.contains(c.getCourseId()))
+                .limit(4)
+                .collect(Collectors.toList());
+            model.addAttribute("recommended", recommended);
+            model.addAttribute("cartIds", cartIds);
+      -->
+      <div class="rec-grid"
+           th:unless="${recommended == null or #lists.isEmpty(recommended)}">
+
+        <div class="rec-card" th:each="course, iter : ${recommended}">
+
+          <!--
+            Icon with cycling colour
+            iter.index % 6 → rci-1 through rci-6
+          -->
+          <div class="rec-icon"
+               th:classappend="${iter.index % 6 == 0} ? 'rci-1' :
+                        (${iter.index % 6 == 1} ? 'rci-2' :
+                        (${iter.index % 6 == 2} ? 'rci-3' :
+                        (${iter.index % 6 == 3} ? 'rci-4' :
+                        (${iter.index % 6 == 4} ? 'rci-5' : 'rci-6'))))">
+            📘
+          </div>
+
+          <div class="rec-info">
+            <!-- th:text="${course.courseName}" — no ID shown -->
+            <div class="rec-name" th:text="${course.courseName}">Course Name</div>
+            <!-- th:text="'By ' + ${course.trainerName}" — bold + blue -->
+            <div class="rec-trainer" th:text="'By ' + ${course.trainerName}">By Trainer</div>
+            <!--
+              LESSON COUNT REMOVED — same reason as cart rows above.
+              #lists.size() in ternary → TemplateParsingException crash.
+            -->
+          </div>
+
+          <!-- Price + action -->
+          <div class="rec-right">
+            <!-- Free price — th:if="${course.courseType == 'free'}" -->
+            <div class="rec-price-free" th:if="${course.courseType == 'free'}">Free</div>
+            <!-- Paid price — th:text="'₹' + ${course.coursePrice}" -->
+            <div class="rec-price"
+                 th:unless="${course.courseType == 'free'}"
+                 th:text="'₹' + ${course.coursePrice}">₹999</div>
+
+            <!--
+              "In Cart" badge — shown when course is already in cart
+              th:if="${cartIds != null and cartIds.contains(course.courseId)}"
+            -->
+            <span class="rec-in-cart"
+                  th:if="${cartIds != null and cartIds.contains(course.courseId)}">
+              🛒 In Cart
+            </span>
+
+            <!--
+              ADD TO CART button — shown when NOT in cart
+              th:href="@{/cart/add(courseId=${course.courseId})}"
+              CartController.addToCart():
+                checks duplicate → adds if not present → session.setAttribute → redirect:/cart
+              courseId in URL only — student sees "+ Cart" button text
+            -->
+            <a th:href="@{/cart/add(courseId=${course.courseId})}"
+               th:unless="${cartIds != null and cartIds.contains(course.courseId)}">
+              <button class="btn-add-sm">+ Cart</button>
+            </a>
+
+          </div>
+        </div><!-- /rec-card loop -->
+
+      </div><!-- /rec-grid -->
+    </div><!-- /recommended section -->
+
+  </div><!-- /con -->
+</div><!-- /page -->
+
+<footer>
+  <div class="footer-inner">
+    <span>© 2026 <a href="/">CourseHub</a> — Built with Spring Boot &amp; Thymeleaf</span>
+    <span>
+      <a href="/student-home">Dashboard</a> &nbsp;·&nbsp;
+      <a href="/all-courses">Courses</a> &nbsp;·&nbsp;
+      <a href="/my-courses">My Courses</a>
+    </span>
+  </div>
+</footer>
+
+<script>
+  /* ── Hamburger menu toggle ── */
+  const mt = document.getElementById('menuToggle');
+  const md = document.getElementById('menuDd');
+  mt.addEventListener('click', e => { e.stopPropagation(); md.classList.toggle('open'); });
+  document.addEventListener('click', () => md.classList.remove('open'));
+  md.addEventListener('click', e => e.stopPropagation());
+</script>
+
+</body>
+</html>

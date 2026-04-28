@@ -1,0 +1,1704 @@
+<!DOCTYPE html>
+<!--
+╔══════════════════════════════════════════════════════════════════════════╗
+║              public_Courses.html  —  PUBLIC VIEW (No Login)             ║
+║         Shows ALL courses to any visitor browsing the website           ║
+╠══════════════════════════════════════════════════════════════════════════╣
+║                                                                          ║
+║  HOW THIS PAGE WORKS                                                    ║
+║  ──────────────────                                                      ║
+║  • Any visitor clicks "View All Courses" on index.html                  ║
+║  • Browser sends GET /public-courses                                    ║
+║  • NavController.publicCourses() handles it — NO session check needed   ║
+║  • It fetches all courses from DB and puts them in Model                ║
+║  • Thymeleaf renders this page with all course cards                    ║
+║  • When visitor clicks "Enroll Now" → they go to /login                 ║
+║  • After login → student is redirected to /student-home                  ║
+║  • There is NO session or authentication required to VIEW this page      ║
+║                                                                          ║
+║  WHAT YOU NEED TO ADD IN BACKEND                                         ║
+║  ────────────────────────────────                                        ║
+║                                                                          ║
+║  ── NavController.java ──                                                ║
+║     (TrainerService @Autowired and getAllCourses() already added         ║
+║      for the /all-courses route — reuse the same service method)        ║
+║                                                                          ║
+║     Add this route:                                                      ║
+║       @GetMapping("/public-courses")                                     ║
+║       public String publicCourses(Model model) {                        ║
+║           List<Course> courses = tService.getAllCourses();               ║
+║           model.addAttribute("courses", courses);                       ║
+║           return "Authenticate/public_Courses";                         ║
+║       }                                                                  ║
+║                                                                          ║
+║  ── File location ──                                                     ║
+║     Save this file as:                                                   ║
+║       src/main/resources/templates/Authenticate/public_Courses.html     ║
+║                                                                          ║
+║  ── index.html change ──                                                 ║
+║     Change "View All Courses →" link from:                              ║
+║       href="/login"                                                      ║
+║     To:                                                                  ║
+║       href="/public-courses"                                             ║
+║                                                                          ║
+║  NOTE: No @Autowired session check here. This route is public.          ║
+║  The protection is on the Enroll button — it goes to /login.            ║
+║  The /student-home and /all-courses routes still need session.          ║
+║                                                                          ║
+╚══════════════════════════════════════════════════════════════════════════╝
+-->
+
+
+
+<!--
+╔══════════════════════════════════════════════════════════════════════════════╗
+║              public_courses.html  —  PUBLIC BROWSE PAGE (No Login)          ║
+╠══════════════════════════════════════════════════════════════════════════════╣
+║                                                                              ║
+║  ┌─────────────────────────────────────────────────────────────────────┐    ║
+║  │                    BACKEND DATA FLOW                                │    ║
+║  │                                                                     │    ║
+║  │  1. Visitor opens  GET /public-courses  (no session required)       │    ║
+║  │  2. NavController.publicCourses(Model model) handles the request    │    ║
+║  │  3. It calls TrainerService.getAllCourses()                         │    ║
+║  │  4. TrainerServiceImpl calls CourseRepository.findAll()             │    ║
+║  │  5. JPA runs: SELECT * FROM course                                  │    ║
+║  │  6. Returns List<Course> → put in Model as "courses"               │    ║
+║  │  7. Thymeleaf renders this page with real course data              │    ║
+║  │  8. "Enroll Now" → /login (visitor must log in first)              │    ║
+║  └─────────────────────────────────────────────────────────────────────┘    ║
+║                                                                              ║
+║  ┌─────────────────────────────────────────────────────────────────────┐    ║
+║  │                NavController.java  —  ADD THIS ROUTE                │    ║
+║  │                                                                     │    ║
+║  │  @GetMapping("/public-courses")                                     │    ║
+║  │  public String publicCourses(Model model) {                         │    ║
+║  │      List<Course> courses = tService.getAllCourses();               │    ║
+║  │      model.addAttribute("courses", courses);                        │    ║
+║  │      model.addAttribute("courseCount", courses.size());             │    ║
+║  │      // count free courses for stats banner                         │    ║
+║  │      long freeCount = courses.stream()                              │    ║
+║  │          .filter(c -> "free".equalsIgnoreCase(c.getCourseType()))   │    ║
+║  │          .count();                                                  │    ║
+║  │      model.addAttribute("freeCount", freeCount);                   │    ║
+║  │      return "Authenticate/public_courses";                          │    ║
+║  │  }                                                                  │    ║
+║  └─────────────────────────────────────────────────────────────────────┘    ║
+║                                                                              ║
+║  THYMELEAF FIELDS USED:                                                      ║
+║  ${courses}                         → List<Course> from model               ║
+║  ${courseCount}                     → courses.size()                         ║
+║  ${freeCount}                       → count of free courses                  ║
+║  th:each="course,iter : ${courses}" → loop (iter gives index for colors)    ║
+║  ${course.courseName}               → course.getCourseName()                 ║
+║  ${course.courseShortDescription}   → course.getCourseShortDescription()     ║
+║  ${course.trainerName}              → course.getTrainerName()                ║
+║  ${course.coursePrice}              → course.getCoursePrice()                ║
+║  ${course.courseType}               → "free" or "paid"                       ║
+║  ${#lists.size(course.lessons)}     → lesson count for this course           ║
+║  ${#lists.isEmpty(courses)}         → true when DB has no courses            ║
+║                                                                              ║
+║  NOTE: Course ID is intentionally NOT shown on this public page.            ║
+║        IDs are internal identifiers — meaningless to visitors.              ║
+║        The Enroll button uses the courseId internally for routing only.     ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+-->
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Browse Courses — Course Hub</title>
+
+    <!-- Google Fonts: Clash Display (headings) + DM Sans (body) -->
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Playfair+Display:wght@700;800;900&display=swap" rel="stylesheet">
+
+    <style>
+        /* ═══════════════════════════════════════════════════
+           DESIGN TOKENS & RESET
+        ═══════════════════════════════════════════════════ */
+        *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+          /* Primary palette — deep midnight + warm gold accent */
+          --midnight:   #0d0f1a;
+          --ink:        #1a1d2e;
+          --navy-deep:  #111827;
+          --blue-rich:  #1e3a8a;
+          --blue-mid:   #2563eb;
+          --blue-bright:#3b82f6;
+          --gold:       #f59e0b;
+          --gold-light: #fef3c7;
+          --cream:      #fefce8;
+
+          /* Surface & text */
+          --surface:    #ffffff;
+          --surface-2:  #f8faff;
+          --surface-3:  #f1f5fe;
+          --text-dark:  #0f172a;
+          --text-mid:   #374151;
+          --text-soft:  #6b7280;
+          --text-muted: #9ca3af;
+          --border:     #e5e7eb;
+          --border-soft:#f0f2f8;
+
+          /* Status */
+          --green:      #059669;
+          --green-bg:   #d1fae5;
+          --red:        #dc2626;
+
+          /* Shadows */
+          --shadow-sm:  0 1px 3px rgba(0,0,0,.06), 0 1px 2px rgba(0,0,0,.04);
+          --shadow-md:  0 4px 16px rgba(30,58,138,.08), 0 2px 4px rgba(0,0,0,.04);
+          --shadow-lg:  0 12px 40px rgba(30,58,138,.14), 0 4px 12px rgba(0,0,0,.06);
+          --shadow-xl:  0 24px 64px rgba(30,58,138,.18);
+
+          /* Fonts */
+          --font-display: 'Playfair Display', serif;
+          --font-body:    'DM Sans', sans-serif;
+
+          /* Misc */
+          --radius:     14px;
+          --radius-sm:  8px;
+          --radius-lg:  20px;
+          --transition: .22s cubic-bezier(.4,0,.2,1);
+        }
+
+        body {
+          font-family: var(--font-body);
+          background: var(--surface-2);
+          color: var(--text-dark);
+          font-size: 15px;
+          line-height: 1.6;
+          min-height: 100vh;
+        }
+        a { text-decoration: none; color: inherit; }
+        ul { list-style: none; }
+
+        /* ═══════════════════════════════════════════════════
+           NAVBAR
+        ═══════════════════════════════════════════════════ */
+        .navbar {
+          background: var(--midnight);
+          position: sticky;
+          top: 0;
+          z-index: 500;
+          box-shadow: 0 1px 0 rgba(255,255,255,.06), 0 4px 20px rgba(0,0,0,.3);
+        }
+        .nav-inner {
+          max-width: 1280px;
+          margin: 0 auto;
+          padding: 0 32px;
+          height: 68px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 20px;
+        }
+        /* Logo */
+        .nav-logo {
+          font-family: var(--font-display);
+          font-size: 1.55rem;
+          font-weight: 800;
+          color: #fff;
+          letter-spacing: -.5px;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+        .nav-logo .logo-dot {
+          width: 8px; height: 8px;
+          background: var(--gold);
+          border-radius: 50%;
+          display: inline-block;
+          margin-bottom: 2px;
+        }
+        /* Nav links */
+        .nav-links {
+          display: flex;
+          align-items: center;
+          gap: 4px;
+        }
+        .nav-links a {
+          font-size: .88rem;
+          font-weight: 500;
+          color: rgba(255,255,255,.65);
+          padding: 8px 14px;
+          border-radius: var(--radius-sm);
+          transition: color var(--transition), background var(--transition);
+        }
+        .nav-links a:hover { color: #fff; background: rgba(255,255,255,.08); }
+        .nav-links a.active { color: var(--gold); }
+
+        /* Buttons */
+        .nav-actions { display: flex; align-items: center; gap: 10px; }
+        .btn-ghost-nav {
+          padding: 8px 18px;
+          font-family: var(--font-body);
+          font-size: .85rem;
+          font-weight: 600;
+          color: rgba(255,255,255,.8);
+          background: rgba(255,255,255,.08);
+          border: 1px solid rgba(255,255,255,.15);
+          border-radius: var(--radius-sm);
+          cursor: pointer;
+          transition: all var(--transition);
+        }
+        .btn-ghost-nav:hover { background: rgba(255,255,255,.15); color: #fff; }
+        .btn-solid-nav {
+          padding: 8px 20px;
+          font-family: var(--font-body);
+          font-size: .85rem;
+          font-weight: 700;
+          color: var(--midnight);
+          background: var(--gold);
+          border: none;
+          border-radius: var(--radius-sm);
+          cursor: pointer;
+          transition: all var(--transition);
+        }
+        .btn-solid-nav:hover { background: #fbbf24; transform: translateY(-1px); }
+
+        /* Mobile hamburger */
+        .hamburger {
+          display: none;
+          flex-direction: column;
+          gap: 5px;
+          background: none;
+          border: none;
+          cursor: pointer;
+          padding: 4px;
+        }
+        .hamburger span {
+          display: block; width: 24px; height: 2px;
+          background: rgba(255,255,255,.8); border-radius: 2px;
+          transition: all var(--transition);
+        }
+
+        /* ═══════════════════════════════════════════════════
+           HERO BANNER — magazine-editorial style
+        ═══════════════════════════════════════════════════ */
+        .hero {
+          background: var(--midnight);
+          /* Subtle diagonal mesh pattern */
+          background-image:
+            radial-gradient(ellipse 80% 60% at 70% 50%, rgba(37,99,235,.25) 0%, transparent 60%),
+            radial-gradient(ellipse 40% 40% at 20% 80%, rgba(245,158,11,.12) 0%, transparent 55%),
+            linear-gradient(160deg, #0d0f1a 0%, #111827 100%);
+          padding: 72px 0 60px;
+          color: #fff;
+          overflow: hidden;
+          position: relative;
+        }
+        /* Decorative grid lines */
+        .hero::before {
+          content: '';
+          position: absolute;
+          inset: 0;
+          background-image:
+            linear-gradient(rgba(255,255,255,.03) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(255,255,255,.03) 1px, transparent 1px);
+          background-size: 60px 60px;
+          pointer-events: none;
+        }
+        .hero-container {
+          max-width: 1280px;
+          margin: 0 auto;
+          padding: 0 32px;
+          position: relative;
+          z-index: 1;
+        }
+
+        /* Breadcrumb */
+        .breadcrumb {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          font-size: .78rem;
+          color: rgba(255,255,255,.4);
+          margin-bottom: 32px;
+          font-weight: 500;
+        }
+        .breadcrumb a { color: rgba(255,255,255,.65); transition: color var(--transition); }
+        .breadcrumb a:hover { color: #fff; }
+        .breadcrumb .sep { color: rgba(255,255,255,.25); }
+
+        /* Hero layout: text left, stats right */
+        .hero-layout {
+          display: grid;
+          grid-template-columns: 1fr auto;
+          align-items: center;
+          gap: 48px;
+        }
+        .hero-label {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          background: rgba(245,158,11,.15);
+          border: 1px solid rgba(245,158,11,.3);
+          color: var(--gold);
+          font-size: .75rem;
+          font-weight: 700;
+          letter-spacing: .1em;
+          text-transform: uppercase;
+          padding: 5px 14px;
+          border-radius: 30px;
+          margin-bottom: 18px;
+        }
+        .hero-label .dot { width: 6px; height: 6px; background: var(--gold); border-radius: 50%; }
+        .hero-title {
+          font-family: var(--font-display);
+          font-size: 3.2rem;
+          font-weight: 900;
+          line-height: 1.1;
+          margin-bottom: 16px;
+          letter-spacing: -.02em;
+        }
+        .hero-title .accent { color: var(--gold); }
+        .hero-subtitle {
+          font-size: 1rem;
+          color: rgba(255,255,255,.65);
+          max-width: 500px;
+          line-height: 1.75;
+          margin-bottom: 32px;
+        }
+        /* CTA buttons in hero */
+        .hero-cta-row {
+          display: flex;
+          gap: 14px;
+          flex-wrap: wrap;
+        }
+        .btn-cta-primary {
+          padding: 13px 28px;
+          font-family: var(--font-body);
+          font-size: .92rem;
+          font-weight: 700;
+          color: var(--midnight);
+          background: var(--gold);
+          border: none;
+          border-radius: var(--radius-sm);
+          cursor: pointer;
+          transition: all var(--transition);
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+        }
+        .btn-cta-primary:hover { background: #fbbf24; transform: translateY(-2px); box-shadow: 0 8px 24px rgba(245,158,11,.35); }
+        .btn-cta-outline {
+          padding: 13px 28px;
+          font-family: var(--font-body);
+          font-size: .92rem;
+          font-weight: 600;
+          color: #fff;
+          background: transparent;
+          border: 1.5px solid rgba(255,255,255,.3);
+          border-radius: var(--radius-sm);
+          cursor: pointer;
+          transition: all var(--transition);
+        }
+        .btn-cta-outline:hover { border-color: rgba(255,255,255,.7); background: rgba(255,255,255,.06); }
+
+        /* Stats cluster on right side of hero */
+        .hero-stats-cluster {
+          display: flex;
+          flex-direction: column;
+          gap: 16px;
+          min-width: 200px;
+        }
+        .stat-bubble {
+          background: rgba(255,255,255,.07);
+          border: 1px solid rgba(255,255,255,.1);
+          border-radius: var(--radius);
+          padding: 18px 22px;
+          backdrop-filter: blur(8px);
+          text-align: center;
+          transition: background var(--transition);
+        }
+        .stat-bubble:hover { background: rgba(255,255,255,.11); }
+        .stat-bubble-num {
+          font-family: var(--font-display);
+          font-size: 2.2rem;
+          font-weight: 900;
+          color: var(--gold);
+          line-height: 1;
+          margin-bottom: 4px;
+        }
+        .stat-bubble-label { font-size: .76rem; color: rgba(255,255,255,.55); font-weight: 500; letter-spacing: .04em; }
+
+        /* ═══════════════════════════════════════════════════
+           LOGIN PROMPT BANNER — eye-catching warm strip
+        ═══════════════════════════════════════════════════ */
+        .login-strip {
+          background: linear-gradient(135deg, #92400e 0%, #b45309 100%);
+          /* This strip tells visitors they need to log in to enroll */
+        }
+        .login-strip-inner {
+          max-width: 1280px;
+          margin: 0 auto;
+          padding: 14px 32px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 20px;
+          flex-wrap: wrap;
+        }
+        .login-strip-text {
+          font-size: .88rem;
+          color: rgba(255,255,255,.9);
+          display: flex;
+          align-items: center;
+          gap: 10px;
+        }
+        .login-strip-text strong { color: #fff; font-weight: 700; }
+        .login-strip-icon {
+          width: 28px; height: 28px; background: rgba(255,255,255,.2);
+          border-radius: 50%; display: flex; align-items: center; justify-content: center;
+          font-size: .85rem; flex-shrink: 0;
+        }
+        .login-strip-actions { display: flex; gap: 10px; }
+        .btn-strip-login {
+          padding: 7px 18px;
+          font-family: var(--font-body);
+          font-size: .82rem; font-weight: 700;
+          color: var(--midnight);
+          background: #fff;
+          border: none; border-radius: var(--radius-sm);
+          cursor: pointer; transition: all var(--transition);
+        }
+        .btn-strip-login:hover { background: #fef9c3; }
+        .btn-strip-signup {
+          padding: 7px 18px;
+          font-family: var(--font-body);
+          font-size: .82rem; font-weight: 600;
+          color: #fff;
+          background: transparent;
+          border: 1.5px solid rgba(255,255,255,.5);
+          border-radius: var(--radius-sm);
+          cursor: pointer; transition: all var(--transition);
+        }
+        .btn-strip-signup:hover { background: rgba(255,255,255,.15); }
+
+        /* ═══════════════════════════════════════════════════
+           MAIN CONTENT AREA
+        ═══════════════════════════════════════════════════ */
+        .main { padding: 48px 0 80px; }
+        .container {
+          max-width: 1280px;
+          margin: 0 auto;
+          padding: 0 32px;
+        }
+
+        /* Top toolbar: title + count + sort */
+        .toolbar {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          flex-wrap: wrap;
+          gap: 16px;
+          margin-bottom: 32px;
+        }
+        .toolbar-left {}
+        .toolbar-tag {
+          font-size: .72rem;
+          font-weight: 700;
+          text-transform: uppercase;
+          letter-spacing: .1em;
+          color: var(--blue-mid);
+          margin-bottom: 4px;
+        }
+        .toolbar-title {
+          font-family: var(--font-display);
+          font-size: 1.6rem;
+          font-weight: 800;
+          color: var(--text-dark);
+          letter-spacing: -.02em;
+        }
+        .toolbar-right {
+          display: flex;
+          align-items: center;
+          gap: 14px;
+        }
+        .course-count-chip {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          background: var(--blue-rich);
+          color: #fff;
+          font-size: .8rem;
+          font-weight: 700;
+          padding: 6px 14px;
+          border-radius: 30px;
+        }
+        .course-count-chip .count-num {
+          font-family: var(--font-display);
+          font-size: 1rem;
+        }
+
+        /* ═══════════════════════════════════════════════════
+           FILTER TABS — simple type filter
+           (These are cosmetic on public page — can be wired to JS filter)
+        ═══════════════════════════════════════════════════ */
+        .filter-bar {
+          display: flex;
+          gap: 8px;
+          flex-wrap: wrap;
+          margin-bottom: 28px;
+        }
+        .filter-tab {
+          padding: 7px 18px;
+          font-family: var(--font-body);
+          font-size: .82rem;
+          font-weight: 600;
+          color: var(--text-soft);
+          background: var(--surface);
+          border: 1.5px solid var(--border);
+          border-radius: 30px;
+          cursor: pointer;
+          transition: all var(--transition);
+        }
+        .filter-tab:hover { border-color: var(--blue-mid); color: var(--blue-mid); }
+        .filter-tab.active {
+          background: var(--blue-rich);
+          border-color: var(--blue-rich);
+          color: #fff;
+        }
+
+        /* ═══════════════════════════════════════════════════
+           COURSE GRID — 3-column magazine layout
+        ═══════════════════════════════════════════════════ */
+        .courses-grid {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 24px;
+        }
+
+        /* ═══════════════════════════════════════════════════
+           COURSE CARD — the main attraction
+           Vertical card: colour band top, content middle, footer bottom
+        ═══════════════════════════════════════════════════ */
+        .course-card {
+          background: var(--surface);
+          border: 1px solid var(--border-soft);
+          border-radius: var(--radius-lg);
+          overflow: hidden;
+          box-shadow: var(--shadow-sm);
+          transition: transform var(--transition), box-shadow var(--transition);
+          display: flex;
+          flex-direction: column;
+          position: relative;
+          /* Stagger animation on load */
+          animation: cardFadeUp .5s ease both;
+        }
+        .course-card:hover {
+          transform: translateY(-6px);
+          box-shadow: var(--shadow-lg);
+        }
+        /*
+          THYMELEAF: animation-delay cycles via iterStat
+          th:style="'animation-delay:' + ${iterStat.index * 60} + 'ms'"
+        */
+        @keyframes cardFadeUp {
+          from { opacity: 0; transform: translateY(20px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+
+        /* ── Colour band (thumb) ─────────────────────────── */
+        /* 6 colour themes cycling via iterStat.index % 6 */
+        .card-band {
+          height: 110px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 0 24px;
+          position: relative;
+          overflow: hidden;
+          flex-shrink: 0;
+        }
+        /* Decorative circle behind emoji */
+        .card-band::before {
+          content: '';
+          position: absolute;
+          right: -20px; top: -20px;
+          width: 130px; height: 130px;
+          border-radius: 50%;
+          background: rgba(255,255,255,.12);
+        }
+        /* 6 colour schemes */
+        .band-c1 { background: linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%); }
+        .band-c2 { background: linear-gradient(135deg, #064e3b 0%, #059669 100%); }
+        .band-c3 { background: linear-gradient(135deg, #7c3aed 0%, #a78bfa 100%); }
+        .band-c4 { background: linear-gradient(135deg, #b45309 0%, #f59e0b 100%); }
+        .band-c5 { background: linear-gradient(135deg, #be185d 0%, #ec4899 100%); }
+        .band-c6 { background: linear-gradient(135deg, #0369a1 0%, #38bdf8 100%); }
+
+        .card-emoji {
+          font-size: 2.6rem;
+          position: relative;
+          z-index: 1;
+          filter: drop-shadow(0 2px 8px rgba(0,0,0,.2));
+        }
+        /* Badge: FREE or PAID — top-right of band */
+        .card-type-badge {
+          position: absolute;
+          top: 14px;
+          right: 14px;
+          font-size: .66rem;
+          font-weight: 800;
+          text-transform: uppercase;
+          letter-spacing: .08em;
+          padding: 4px 10px;
+          border-radius: 20px;
+          z-index: 2;
+        }
+        /* THYMELEAF: th:if / th:unless for free vs paid badge */
+        .badge-free { background: rgba(5,150,105,.9); color: #fff; }
+        .badge-paid { background: rgba(255,255,255,.92); color: var(--blue-rich); }
+
+        /* ── Card body ───────────────────────────────────── */
+        .card-body {
+          padding: 20px 22px 16px;
+          flex: 1;
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+        }
+        /*
+          COURSE NAME — largest text, wrap allowed for multi-line titles
+          THYMELEAF: th:text="${course.courseName}"
+        */
+        .card-name {
+          font-size: .97rem;
+          font-weight: 700;
+          color: var(--text-dark);
+          line-height: 1.4;
+          /* Allow up to 2 lines then ellipsis */
+          display: -webkit-box;
+          -webkit-line-clamp: 2;
+          -webkit-box-orient: vertical;
+          overflow: hidden;
+        }
+        /*
+          TRAINER NAME — bold per requirement, with person icon
+          THYMELEAF: th:text="${course.trainerName}"
+          NOTE: Course ID is intentionally hidden from public users —
+                it is an internal DB key, not meaningful to visitors.
+                Used internally only in href="/login" for routing after login.
+        */
+        .card-trainer {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          font-size: .82rem;
+          font-weight: 700;           /* ← BOLD as requested */
+          color: var(--blue-mid);
+        }
+        .card-trainer .trainer-icon {
+          width: 22px; height: 22px; border-radius: 50%;
+          background: var(--surface-3);
+          display: flex; align-items: center; justify-content: center;
+          font-size: .7rem; flex-shrink: 0;
+        }
+        /*
+          COURSE DESCRIPTION — subtle grey, 2 line clamp
+          THYMELEAF: th:text="${course.courseShortDescription}"
+        */
+        .card-desc {
+          font-size: .8rem;
+          color: var(--text-soft);
+          line-height: 1.6;
+          display: -webkit-box;
+          -webkit-line-clamp: 2;
+          -webkit-box-orient: vertical;
+          overflow: hidden;
+          flex: 1;
+        }
+        /* Meta row: lessons count */
+        .card-meta {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          font-size: .75rem;
+          color: var(--text-muted);
+          margin-top: 4px;
+        }
+        .card-meta-item {
+          display: flex;
+          align-items: center;
+          gap: 4px;
+        }
+
+        /* ── Card footer ─────────────────────────────────── */
+        .card-footer {
+          padding: 14px 22px;
+          border-top: 1px solid var(--border-soft);
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          background: var(--surface-3);
+          flex-shrink: 0;
+        }
+        .card-price-area {}
+        /*
+          PRICE DISPLAY
+          THYMELEAF:
+            th:if="${course.courseType == 'free'}"    → show Free badge
+            th:unless="${course.courseType == 'free'}"→ show ₹price
+        */
+        .price-free {
+          font-family: var(--font-display);
+          font-size: 1.15rem;
+          font-weight: 900;
+          color: var(--green);
+        }
+        .price-paid {
+          font-family: var(--font-display);
+          font-size: 1.15rem;
+          font-weight: 900;
+          color: var(--blue-rich);
+        }
+        .price-label {
+          font-size: .67rem;
+          color: var(--text-muted);
+          font-weight: 500;
+          margin-top: 1px;
+        }
+        /*
+          ENROLL BUTTON — goes to /login on this public page
+          After login, Spring redirects student to /student-home
+          From there they can find the course and add to cart.
+        */
+        .btn-enroll {
+          padding: 9px 20px;
+          font-family: var(--font-body);
+          font-size: .82rem;
+          font-weight: 700;
+          color: #fff;
+          background: var(--blue-rich);
+          border: none;
+          border-radius: var(--radius-sm);
+          cursor: pointer;
+          transition: all var(--transition);
+          white-space: nowrap;
+          display: flex;
+          align-items: center;
+          gap: 6px;
+        }
+        .btn-enroll:hover {
+          background: var(--blue-mid);
+          transform: scale(1.04);
+        }
+        /* Free course enroll button — different colour */
+        .btn-enroll-free {
+          background: var(--green);
+        }
+        .btn-enroll-free:hover { background: #047857; }
+
+        /* ── Hover overlay: "View Course" hint ─────────── */
+        .card-hover-hint {
+          position: absolute;
+          inset: 0;
+          background: rgba(14,18,40,.04);
+          pointer-events: none;
+          opacity: 0;
+          transition: opacity var(--transition);
+        }
+        .course-card:hover .card-hover-hint { opacity: 1; }
+
+        /* ═══════════════════════════════════════════════════
+           EMPTY STATE — shown when DB has 0 courses
+           THYMELEAF: th:if="${#lists.isEmpty(courses)}"
+        ═══════════════════════════════════════════════════ */
+        .empty-state {
+          grid-column: 1 / -1;
+          text-align: center;
+          padding: 80px 20px;
+          background: var(--surface);
+          border: 2px dashed var(--border);
+          border-radius: var(--radius-lg);
+        }
+        .empty-icon { font-size: 3.5rem; margin-bottom: 16px; }
+        .empty-state h3 { font-size: 1.1rem; font-weight: 700; color: var(--text-dark); margin-bottom: 8px; }
+        .empty-state p  { font-size: .88rem; color: var(--text-soft); max-width: 340px; margin: 0 auto; }
+
+        /* ═══════════════════════════════════════════════════
+           WHY JOIN SECTION — below the course grid
+        ═══════════════════════════════════════════════════ */
+        .why-section { margin-top: 72px; }
+        .why-header { text-align: center; margin-bottom: 40px; }
+        .why-tag {
+          display: inline-block;
+          background: var(--gold-light);
+          color: #92400e;
+          font-size: .72rem;
+          font-weight: 700;
+          text-transform: uppercase;
+          letter-spacing: .1em;
+          padding: 5px 14px;
+          border-radius: 20px;
+          margin-bottom: 12px;
+        }
+        .why-title {
+          font-family: var(--font-display);
+          font-size: 2rem;
+          font-weight: 900;
+          color: var(--text-dark);
+          letter-spacing: -.02em;
+          margin-bottom: 10px;
+        }
+        .why-subtitle { font-size: .93rem; color: var(--text-soft); max-width: 480px; margin: 0 auto; }
+        .why-grid {
+          display: grid;
+          grid-template-columns: repeat(4, 1fr);
+          gap: 20px;
+        }
+        .why-card {
+          background: var(--surface);
+          border: 1px solid var(--border-soft);
+          border-radius: var(--radius);
+          padding: 28px 22px;
+          box-shadow: var(--shadow-sm);
+          text-align: center;
+          transition: transform var(--transition), box-shadow var(--transition);
+        }
+        .why-card:hover { transform: translateY(-4px); box-shadow: var(--shadow-md); }
+        .why-icon {
+          width: 52px; height: 52px;
+          border-radius: 14px;
+          display: flex; align-items: center; justify-content: center;
+          font-size: 1.4rem;
+          margin: 0 auto 14px;
+        }
+        .wi-blue   { background: #dbeafe; }
+        .wi-green  { background: #d1fae5; }
+        .wi-gold   { background: #fef3c7; }
+        .wi-purple { background: #ede9fe; }
+        .why-card h4 { font-size: .92rem; font-weight: 700; color: var(--text-dark); margin-bottom: 6px; }
+        .why-card p  { font-size: .8rem; color: var(--text-soft); line-height: 1.65; }
+
+        /* ═══════════════════════════════════════════════════
+           BOTTOM CTA BANNER
+        ═══════════════════════════════════════════════════ */
+        .cta-banner {
+          margin-top: 64px;
+          background: var(--midnight);
+          background-image:
+            radial-gradient(ellipse 70% 80% at 80% 50%, rgba(37,99,235,.3) 0%, transparent 60%),
+            radial-gradient(ellipse 40% 50% at 10% 60%, rgba(245,158,11,.15) 0%, transparent 55%);
+          border-radius: var(--radius-lg);
+          padding: 56px 52px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 32px;
+          flex-wrap: wrap;
+          position: relative;
+          overflow: hidden;
+        }
+        .cta-banner::before {
+          content: '';
+          position: absolute;
+          inset: 0;
+          background-image:
+            linear-gradient(rgba(255,255,255,.02) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(255,255,255,.02) 1px, transparent 1px);
+          background-size: 40px 40px;
+        }
+        .cta-text { position: relative; z-index: 1; }
+        .cta-text h2 {
+          font-family: var(--font-display);
+          font-size: 2rem; font-weight: 900;
+          color: #fff; margin-bottom: 10px; letter-spacing: -.02em;
+        }
+        .cta-text h2 span { color: var(--gold); }
+        .cta-text p { font-size: .93rem; color: rgba(255,255,255,.65); max-width: 380px; line-height: 1.7; }
+        .cta-actions {
+          display: flex; gap: 14px; flex-wrap: wrap;
+          position: relative; z-index: 1;
+        }
+
+        /* ═══════════════════════════════════════════════════
+           FOOTER
+        ═══════════════════════════════════════════════════ */
+        footer {
+          background: var(--navy-deep);
+          color: rgba(255,255,255,.45);
+          padding: 60px 0 30px;
+          margin-top: 0;
+        }
+        .footer-inner {
+          max-width: 1280px;
+          margin: 0 auto;
+          padding: 0 32px;
+        }
+        .footer-grid {
+          display: grid;
+          grid-template-columns: 2fr 1fr 1fr 1fr;
+          gap: 48px;
+          padding-bottom: 48px;
+          border-bottom: 1px solid rgba(255,255,255,.08);
+        }
+        .footer-brand-name {
+          font-family: var(--font-display);
+          font-size: 1.4rem;
+          font-weight: 800;
+          color: #fff;
+          margin-bottom: 12px;
+          display: block;
+        }
+        .footer-about { font-size: .84rem; line-height: 1.8; max-width: 220px; }
+        .footer-col h5 {
+          font-size: .73rem;
+          font-weight: 700;
+          text-transform: uppercase;
+          letter-spacing: .1em;
+          color: rgba(255,255,255,.6);
+          margin-bottom: 16px;
+        }
+        .footer-col ul { display: flex; flex-direction: column; gap: 10px; }
+        .footer-col a { font-size: .84rem; color: rgba(255,255,255,.45); transition: color var(--transition); }
+        .footer-col a:hover { color: #fff; }
+        .footer-bottom {
+          padding-top: 28px;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          font-size: .8rem;
+          flex-wrap: wrap;
+          gap: 10px;
+        }
+        .footer-bottom a { color: var(--gold); }
+
+        /* ═══════════════════════════════════════════════════
+           RESPONSIVE
+        ═══════════════════════════════════════════════════ */
+        @media (max-width: 1100px) {
+          .courses-grid { grid-template-columns: repeat(2, 1fr); }
+          .why-grid { grid-template-columns: repeat(2, 1fr); }
+          .hero-title { font-size: 2.5rem; }
+        }
+        @media (max-width: 820px) {
+          .hero-layout { grid-template-columns: 1fr; }
+          .hero-stats-cluster { flex-direction: row; flex-wrap: wrap; min-width: unset; }
+          .stat-bubble { flex: 1; min-width: 130px; }
+          .nav-links { display: none; }
+          .hamburger { display: flex; }
+          .footer-grid { grid-template-columns: 1fr 1fr; }
+          .cta-banner { flex-direction: column; text-align: center; padding: 40px 28px; }
+          .cta-text p { margin: 0 auto; }
+          .cta-actions { justify-content: center; }
+        }
+        @media (max-width: 640px) {
+          .courses-grid { grid-template-columns: 1fr; }
+          .why-grid { grid-template-columns: 1fr 1fr; }
+          .nav-inner, .container, .hero-container, .footer-inner { padding: 0 20px; }
+          .hero { padding: 48px 0 42px; }
+          .hero-title { font-size: 2rem; }
+          .login-strip-inner { padding: 12px 20px; }
+        }
+        @media (max-width: 420px) {
+          .why-grid { grid-template-columns: 1fr; }
+          .footer-grid { grid-template-columns: 1fr; }
+          .hero-cta-row { flex-direction: column; }
+        }
+    </style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════════
+     NAVBAR
+═══════════════════════════════════════════════════════════ -->
+<nav class="navbar">
+    <div class="nav-inner">
+
+        <!-- Logo -->
+        <a href="/" class="nav-logo">
+            CourseHub<span class="logo-dot"></span>
+        </a>
+
+        <!-- Desktop nav links -->
+        <ul class="nav-links">
+            <li><a href="/#how-it-works">How It Works</a></li>
+            <li><a href="/#features">Features</a></li>
+            <li><a href="/public-courses" class="active">Browse Courses</a></li>
+        </ul>
+
+        <!-- Auth buttons -->
+        <div class="nav-actions">
+            <a href="/login"><button class="btn-ghost-nav">Log In</button></a>
+            <a href="/signup"><button class="btn-solid-nav">Sign Up Free ✦</button></a>
+        </div>
+
+        <!-- Hamburger for mobile -->
+        <button class="hamburger" id="hamburger" aria-label="Open menu">
+            <span></span><span></span><span></span>
+        </button>
+
+    </div>
+</nav>
+
+<!-- ═══════════════════════════════════════════════════════════
+     HERO BANNER
+═══════════════════════════════════════════════════════════ -->
+<section class="hero">
+    <div class="hero-container">
+
+        <!-- Breadcrumb -->
+        <nav class="breadcrumb" aria-label="Breadcrumb">
+            <a href="/">Home</a>
+            <span class="sep">›</span>
+            <span>Browse Courses</span>
+        </nav>
+
+        <div class="hero-layout">
+            <!-- Left: headline + CTA -->
+            <div>
+                <div class="hero-label">
+                    <span class="dot"></span>
+                    Open to Everyone — No Account Needed to Browse
+                </div>
+                <h1 class="hero-title">
+                    Discover Courses<br>
+                    Built to Help You<br>
+                    <span class="accent">Grow.</span>
+                </h1>
+                <p class="hero-subtitle">
+                    Browse expert-curated courses across development, design, data science and more.
+                    Create a free account to enroll and start learning today.
+                </p>
+                <div class="hero-cta-row">
+                    <a href="/signup">
+                        <button class="btn-cta-primary">🎓 Sign Up Free</button>
+                    </a>
+                    <a href="/login">
+                        <button class="btn-cta-outline">Already have an account? Log in</button>
+                    </a>
+                </div>
+            </div>
+
+            <!-- Right: stat bubbles
+                 ─────────────────────────────────────────────────────
+                 THYMELEAF — replace static numbers with:
+                   th:text="${courseCount}"   → total courses in DB
+                   th:text="${freeCount}"     → count of free courses
+                   (both set in NavController above)
+                 ───────────────────────────────────────────────────── -->
+            <div class="hero-stats-cluster">
+                <div class="stat-bubble">
+                    <div class="stat-bubble-num" th:text="${courseCount}">0</div>
+                    <div class="stat-bubble-label">Courses Available</div>
+                </div>
+                <div class="stat-bubble">
+                    <div class="stat-bubble-num" th:text="${freeCount}">0</div>
+                    <div class="stat-bubble-label">Free Courses</div>
+                </div>
+                <div class="stat-bubble">
+                    <div class="stat-bubble-num">∞</div>
+                    <div class="stat-bubble-label">Lifetime Access</div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════════
+     LOGIN PROMPT STRIP
+     Always visible — reminds visitors to sign up to enroll
+═══════════════════════════════════════════════════════════ -->
+<div class="login-strip">
+    <div class="login-strip-inner">
+        <div class="login-strip-text">
+            <div class="login-strip-icon">🔐</div>
+            <span>
+        <strong>Ready to start learning?</strong>
+        Create a free account to enroll in any course and get lifetime access.
+      </span>
+        </div>
+        <div class="login-strip-actions">
+            <a href="/login"><button class="btn-strip-login">Log In</button></a>
+            <a href="/signup"><button class="btn-strip-signup">Sign Up Free</button></a>
+        </div>
+    </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     MAIN — COURSE LISTING
+═══════════════════════════════════════════════════════════ -->
+<main class="main">
+    <div class="container">
+
+        <!-- Toolbar: title + count + filter tabs -->
+        <div class="toolbar">
+            <div class="toolbar-left">
+                <div class="toolbar-tag">📚 Course Catalogue</div>
+                <h2 class="toolbar-title">All Available Courses</h2>
+            </div>
+            <div class="toolbar-right">
+                <!--
+                  THYMELEAF: replace 0 with th:text="${courseCount}"
+                  Shows live count of courses from DB
+                -->
+                <div class="course-count-chip">
+                    <span class="count-num" th:text="${courseCount}">0</span>
+                    <span>courses</span>
+                </div>
+            </div>
+        </div>
+
+        <!--
+          FILTER TABS — cosmetic on this page.
+          In a full implementation, add data-filter="all|free|paid" and
+          wire a JS filter that shows/hides cards by type.
+        -->
+        <div class="filter-bar">
+            <button class="filter-tab active" onclick="filterCourses('all', this)">All Courses</button>
+            <button class="filter-tab" onclick="filterCourses('paid', this)">💰 Paid</button>
+            <button class="filter-tab" onclick="filterCourses('free', this)">🆓 Free</button>
+        </div>
+
+        <!-- ═══════════════════════════════════════════════════
+             COURSE GRID
+             ───────────────────────────────────────────────────
+             THYMELEAF — REPLACE STATIC DEMO WITH THIS BLOCK:
+
+             EMPTY STATE (no courses in DB yet):
+               <div class="courses-grid">
+                 <div class="empty-state" th:if="${#lists.isEmpty(courses)}">
+                   <div class="empty-icon">📭</div>
+                   <h3>No Courses Available Yet</h3>
+                   <p>Trainers are creating content. Check back soon!</p>
+                 </div>
+               </div>
+
+             DYNAMIC COURSE CARDS (one per course row in DB):
+               <div class="courses-grid" th:unless="${#lists.isEmpty(courses)}">
+
+                 <div class="course-card"
+                      th:each="course, iter : ${courses}"
+                      th:data-type="${course.courseType}"
+                      th:style="'animation-delay:' + ${iter.index * 60} + 'ms'">
+
+                   ── Colour band ──
+                   Uses iter.index % 6 to cycle through 6 colour themes.
+                   th:classappend cycles: band-c1 band-c2 band-c3 band-c4 band-c5 band-c6
+
+                     <div class="card-band"
+                          th:classappend="${iter.index % 6 == 0} ? 'band-c1' :
+                                   (${iter.index % 6 == 1} ? 'band-c2' :
+                                   (${iter.index % 6 == 2} ? 'band-c3' :
+                                   (${iter.index % 6 == 3} ? 'band-c4' :
+                                   (${iter.index % 6 == 4} ? 'band-c5' : 'band-c6'))))">
+
+                       <div class="card-emoji">📘</div>
+
+                       FREE badge (green):
+                         <span class="card-type-badge badge-free"
+                               th:if="${course.courseType == 'free'}">Free</span>
+                       PAID badge (white):
+                         <span class="card-type-badge badge-paid"
+                               th:unless="${course.courseType == 'free'}">Paid</span>
+
+                     </div>
+
+                   ── Card body ──
+                     <div class="card-body">
+
+                       Course name (NO course ID shown — ID is internal only):
+                         <div class="card-name" th:text="${course.courseName}">Name</div>
+
+                       Trainer name in BOLD (per requirement):
+                         <div class="card-trainer">
+                           <div class="trainer-icon">👤</div>
+                           <span th:text="${course.trainerName}">Trainer</span>
+                         </div>
+
+                       Description:
+                         <div class="card-desc"
+                              th:text="${course.courseShortDescription}">Desc</div>
+
+                       Lesson count:
+                         <div class="card-meta">
+                           <div class="card-meta-item">
+                             <span>📖</span>
+                             <span th:text="${#lists.size(course.lessons)} + ' Lessons'">0 Lessons</span>
+                           </div>
+                         </div>
+
+                     </div>
+
+                   ── Card footer ──
+                     <div class="card-footer">
+                       <div class="card-price-area">
+                         Free:
+                           <div class="price-free"
+                                th:if="${course.courseType == 'free'}">Free</div>
+                         Paid:
+                           <div class="price-paid"
+                                th:unless="${course.courseType == 'free'}"
+                                th:text="'₹' + ${course.coursePrice}">₹999</div>
+                         <div class="price-label">
+                           <span th:if="${course.courseType == 'free'}">No cost, ever</span>
+                           <span th:unless="${course.courseType == 'free'}">One-time payment</span>
+                         </div>
+                       </div>
+
+                       Enroll button — goes to /login (visitor not yet logged in):
+                       After login, Spring routes to /student-home.
+                       From there, student can find course and add to cart.
+                         <a href="/login">
+                           <button class="btn-enroll"
+                                   th:classappend="${course.courseType == 'free'} ? 'btn-enroll-free' : ''">
+                             <span>Enroll Now</span> →
+                           </button>
+                         </a>
+                     </div>
+
+                   <div class="card-hover-hint"></div>
+
+                 </div>
+               </div>
+             ═════════════════════════════════════════════════════ -->
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        <div class="courses-grid">
+            <div class="empty-state" th:if="${#lists.isEmpty(courses)}">
+                <div class="empty-icon">📭</div>
+                <h3>No Courses Available Yet</h3>
+                <p>Trainers are creating content. Check back soon!</p>
+            </div>
+        </div>
+
+
+        <div class="courses-grid" th:unless="${#lists.isEmpty(courses)}">
+
+            <div class="course-card"
+                 th:each="course, iter : ${courses}"
+                 th:data-type="${course.courseType}"
+                 th:style="'animation-delay:' + ${iter.index * 60} + 'ms'">
+
+
+
+                <div class="card-band"
+                     th:classappend="${iter.index % 6 == 0} ? 'band-c1' :
+                                   (${iter.index % 6 == 1} ? 'band-c2' :
+                                   (${iter.index % 6 == 2} ? 'band-c3' :
+                                   (${iter.index % 6 == 3} ? 'band-c4' :
+                                   (${iter.index % 6 == 4} ? 'band-c5' : 'band-c6'))))">
+
+                    <div class="card-emoji">📘</div>
+
+
+                    <span class="card-type-badge badge-free"
+                          th:if="${course.courseType == 'free'}">Free</span>
+
+                    <span class="card-type-badge badge-paid"
+                          th:unless="${course.courseType == 'free'}">Paid</span>
+
+                </div>
+
+
+                <div class="card-body">
+
+
+                    <div class="card-name" th:text="${course.courseName}">Name</div>
+
+
+                    <div class="card-trainer">
+                        <div class="trainer-icon">👤</div>
+                        <span th:text="${course.trainerName}">Trainer</span>
+                    </div>
+
+
+                    <div class="card-desc"
+                         th:text="${course.courseShortDescription}">Desc</div>
+
+
+                    <div class="card-meta">
+                        <div class="card-meta-item">
+                            <span>📖</span>
+                            <span th:text="${#lists.size(course.lessons)} + ' Lessons'">0 Lessons</span>
+                        </div>
+                    </div>
+
+                </div>
+
+
+                <div class="card-footer">
+                    <div class="card-price-area">
+
+                        <div class="price-free"
+                             th:if="${course.courseType == 'free'}">Free</div>
+
+                        <div class="price-paid"
+                             th:unless="${course.courseType == 'free'}"
+                             th:text="'₹' + ${course.coursePrice}">₹999</div>
+                        <div class="price-label">
+                            <span th:if="${course.courseType == 'free'}">No cost, ever</span>
+                            <span th:unless="${course.courseType == 'free'}">One-time payment</span>
+                        </div>
+                    </div>
+
+
+                    <a href="/login">
+                        <button class="btn-enroll"
+                                th:classappend="${course.courseType == 'free'} ? 'btn-enroll-free' : ''">
+                            <span>Enroll Now</span> →
+                        </button>
+                    </a>
+                </div>
+
+                <div class="card-hover-hint"></div>
+
+            </div>
+        </div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        <!-- STATIC DEMO CARDS — Remove when Thymeleaf backend is connected -->
+        <!--<div class="courses-grid" id="coursesGrid">
+
+            &lt;!&ndash; Card 1 &ndash;&gt;
+            <div class="course-card" data-type="paid" style="animation-delay:0ms">
+                <div class="card-band band-c1">
+                    <div class="card-emoji">☕</div>
+                    <span class="card-type-badge badge-paid">Paid</span>
+                </div>
+                <div class="card-body">
+                    <div class="card-name">Spring Boot for Beginners — From Zero to REST API</div>
+                    <div class="card-trainer">
+                        <div class="trainer-icon">👤</div>
+                        <span>Arjun Patel</span>
+                    </div>
+                    <div class="card-desc">Build production-ready REST APIs using Spring Boot, JPA, and MySQL from scratch. Perfect for Java developers stepping into backend development.</div>
+                    <div class="card-meta">
+                        <div class="card-meta-item"><span>📖</span><span>24 Lessons</span></div>
+                    </div>
+                </div>
+                <div class="card-footer">
+                    <div class="card-price-area">
+                        <div class="price-paid">₹999</div>
+                        <div class="price-label">One-time payment</div>
+                    </div>
+                    <a href="/login"><button class="btn-enroll">Enroll Now →</button></a>
+                </div>
+                <div class="card-hover-hint"></div>
+            </div>
+
+            &lt;!&ndash; Card 2 &ndash;&gt;
+            <div class="course-card" data-type="free" style="animation-delay:60ms">
+                <div class="card-band band-c2">
+                    <div class="card-emoji">🐍</div>
+                    <span class="card-type-badge badge-free">Free</span>
+                </div>
+                <div class="card-body">
+                    <div class="card-name">Python Programming — Complete Beginner's Guide</div>
+                    <div class="card-trainer">
+                        <div class="trainer-icon">👤</div>
+                        <span>Sneha Roy</span>
+                    </div>
+                    <div class="card-desc">Learn Python from the ground up — variables, loops, functions, file handling, and mini projects. No prior experience required.</div>
+                    <div class="card-meta">
+                        <div class="card-meta-item"><span>📖</span><span>18 Lessons</span></div>
+                    </div>
+                </div>
+                <div class="card-footer">
+                    <div class="card-price-area">
+                        <div class="price-free">Free</div>
+                        <div class="price-label">No cost, ever</div>
+                    </div>
+                    <a href="/login"><button class="btn-enroll btn-enroll-free">Enroll Now →</button></a>
+                </div>
+                <div class="card-hover-hint"></div>
+            </div>
+
+            &lt;!&ndash; Card 3 &ndash;&gt;
+            <div class="course-card" data-type="paid" style="animation-delay:120ms">
+                <div class="card-band band-c3">
+                    <div class="card-emoji">🌐</div>
+                    <span class="card-type-badge badge-paid">Paid</span>
+                </div>
+                <div class="card-body">
+                    <div class="card-name">HTML, CSS &amp; JavaScript — Build Real Websites</div>
+                    <div class="card-trainer">
+                        <div class="trainer-icon">👤</div>
+                        <span>Vikram Das</span>
+                    </div>
+                    <div class="card-desc">Master the three pillars of web development and build fully functional, responsive websites from scratch.</div>
+                    <div class="card-meta">
+                        <div class="card-meta-item"><span>📖</span><span>30 Lessons</span></div>
+                    </div>
+                </div>
+                <div class="card-footer">
+                    <div class="card-price-area">
+                        <div class="price-paid">₹799</div>
+                        <div class="price-label">One-time payment</div>
+                    </div>
+                    <a href="/login"><button class="btn-enroll">Enroll Now →</button></a>
+                </div>
+                <div class="card-hover-hint"></div>
+            </div>
+
+            &lt;!&ndash; Card 4 &ndash;&gt;
+            <div class="course-card" data-type="paid" style="animation-delay:180ms">
+                <div class="card-band band-c4">
+                    <div class="card-emoji">📊</div>
+                    <span class="card-type-badge badge-paid">Paid</span>
+                </div>
+                <div class="card-body">
+                    <div class="card-name">Data Analysis with Python and Pandas</div>
+                    <div class="card-trainer">
+                        <div class="trainer-icon">👤</div>
+                        <span>Priya Mehta</span>
+                    </div>
+                    <div class="card-desc">Analyse real-world datasets using Python, Pandas, and Matplotlib. Build charts, clean data, and draw insights.</div>
+                    <div class="card-meta">
+                        <div class="card-meta-item"><span>📖</span><span>22 Lessons</span></div>
+                    </div>
+                </div>
+                <div class="card-footer">
+                    <div class="card-price-area">
+                        <div class="price-paid">₹1,299</div>
+                        <div class="price-label">One-time payment</div>
+                    </div>
+                    <a href="/login"><button class="btn-enroll">Enroll Now →</button></a>
+                </div>
+                <div class="card-hover-hint"></div>
+            </div>
+
+            &lt;!&ndash; Card 5 &ndash;&gt;
+            <div class="course-card" data-type="paid" style="animation-delay:240ms">
+                <div class="card-band band-c5">
+                    <div class="card-emoji">🎨</div>
+                    <span class="card-type-badge badge-paid">Paid</span>
+                </div>
+                <div class="card-body">
+                    <div class="card-name">UI Design Fundamentals — Figma for Beginners</div>
+                    <div class="card-trainer">
+                        <div class="trainer-icon">👤</div>
+                        <span>Ananya Singh</span>
+                    </div>
+                    <div class="card-desc">Learn design thinking and Figma to create stunning, user-friendly interfaces from your very first lesson.</div>
+                    <div class="card-meta">
+                        <div class="card-meta-item"><span>📖</span><span>20 Lessons</span></div>
+                    </div>
+                </div>
+                <div class="card-footer">
+                    <div class="card-price-area">
+                        <div class="price-paid">₹899</div>
+                        <div class="price-label">One-time payment</div>
+                    </div>
+                    <a href="/login"><button class="btn-enroll">Enroll Now →</button></a>
+                </div>
+                <div class="card-hover-hint"></div>
+            </div>
+
+            &lt;!&ndash; Card 6 &ndash;&gt;
+            <div class="course-card" data-type="paid" style="animation-delay:300ms">
+                <div class="card-band band-c6">
+                    <div class="card-emoji">⚛️</div>
+                    <span class="card-type-badge badge-paid">Paid</span>
+                </div>
+                <div class="card-body">
+                    <div class="card-name">React.js — Build Modern Web Applications</div>
+                    <div class="card-trainer">
+                        <div class="trainer-icon">👤</div>
+                        <span>Rohit Sharma</span>
+                    </div>
+                    <div class="card-desc">Master React hooks, components, and state management to build fast, modern, interactive web applications.</div>
+                    <div class="card-meta">
+                        <div class="card-meta-item"><span>📖</span><span>35 Lessons</span></div>
+                    </div>
+                </div>
+                <div class="card-footer">
+                    <div class="card-price-area">
+                        <div class="price-paid">₹1,199</div>
+                        <div class="price-label">One-time payment</div>
+                    </div>
+                    <a href="/login"><button class="btn-enroll">Enroll Now →</button></a>
+                </div>
+                <div class="card-hover-hint"></div>
+            </div>
+
+        </div>--><!-- /courses-grid -->
+
+        <!-- ═══════════════════════════════════════════════════
+             WHY JOIN SECTION
+        ═══════════════════════════════════════════════════ -->
+        <div class="why-section">
+            <div class="why-header">
+                <div class="why-tag">✦ Why Course Hub</div>
+                <h2 class="why-title">Everything You Need to Learn Well</h2>
+                <p class="why-subtitle">Built for students who want to grow skills that actually matter in the real world.</p>
+            </div>
+            <div class="why-grid">
+                <div class="why-card">
+                    <div class="why-icon wi-blue">🎥</div>
+                    <h4>HD Video Lessons</h4>
+                    <p>Stream every lesson in high quality on any device — laptop, tablet, or phone. Learn on your schedule.</p>
+                </div>
+                <div class="why-card">
+                    <div class="why-icon wi-green">🏆</div>
+                    <h4>Certificates</h4>
+                    <p>Earn a verified certificate on course completion. Shareable directly on LinkedIn and your resume.</p>
+                </div>
+                <div class="why-card">
+                    <div class="why-icon wi-gold">♾️</div>
+                    <h4>Lifetime Access</h4>
+                    <p>Pay once, access forever. Revisit lessons anytime as your career grows and questions evolve.</p>
+                </div>
+                <div class="why-card">
+                    <div class="why-icon wi-purple">💬</div>
+                    <h4>Expert Trainers</h4>
+                    <p>Learn from working professionals. Ask questions directly and get answers from people who do this daily.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- ═══════════════════════════════════════════════════
+             BOTTOM CTA BANNER
+        ═══════════════════════════════════════════════════ -->
+        <div class="cta-banner">
+            <div class="cta-text">
+                <h2>Start Learning <span>Today</span> — It's Free.</h2>
+                <p>Create your account in under 60 seconds. Browse every course, enroll in free ones immediately, and unlock paid courses anytime.</p>
+            </div>
+            <div class="cta-actions">
+                <a href="/signup">
+                    <button class="btn-cta-primary">🎓 Create Free Account</button>
+                </a>
+                <a href="/login">
+                    <button class="btn-cta-outline">Log In</button>
+                </a>
+            </div>
+        </div>
+
+    </div><!-- /container -->
+</main>
+
+<!-- ═══════════════════════════════════════════════════════════
+     FOOTER
+═══════════════════════════════════════════════════════════ -->
+<footer>
+    <div class="footer-inner">
+        <div class="footer-grid">
+            <div>
+                <span class="footer-brand-name">CourseHub</span>
+                <p class="footer-about">An online learning platform connecting expert trainers with ambitious students who want to build real skills and grow their careers.</p>
+            </div>
+            <div class="footer-col">
+                <h5>Platform</h5>
+                <ul>
+                    <li><a href="/public-courses">Browse Courses</a></li>
+                    <li><a href="/signup">Become a Trainer</a></li>
+                    <li><a href="#">Certificates</a></li>
+                    <li><a href="#">Pricing</a></li>
+                </ul>
+            </div>
+            <div class="footer-col">
+                <h5>Account</h5>
+                <ul>
+                    <li><a href="/login">Log In</a></li>
+                    <li><a href="/signup">Sign Up Free</a></li>
+                </ul>
+            </div>
+            <div class="footer-col">
+                <h5>Support</h5>
+                <ul>
+                    <li><a href="#">Help Center</a></li>
+                    <li><a href="#">Terms of Service</a></li>
+                    <li><a href="#">Privacy Policy</a></li>
+                    <li><a href="#">Refund Policy</a></li>
+                </ul>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <span>© 2026 CourseHub — All rights reserved.</span>
+            <span>Built with <a href="#">Spring Boot</a> &amp; Thymeleaf</span>
+        </div>
+    </div>
+</footer>
+
+<script>
+    /* ═══════════════════════════════════════════════════════════
+       FILTER TABS — filter course cards by type (all / paid / free)
+
+       HOW IT WORKS:
+       1. Each card has data-type="free" or data-type="paid"
+          (THYMELEAF: th:data-type="${course.courseType}")
+       2. filterCourses() reads that attribute and shows/hides cards
+       3. Tab styling is updated to show which filter is active
+
+       NOTE: When connected to Thymeleaf, Thymeleaf renders all cards.
+       This JS filters them client-side with CSS display toggle.
+    ═══════════════════════════════════════════════════════════ */
+    function filterCourses(type, btn) {
+      // Update active tab styling
+      document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
+      btn.classList.add('active');
+
+      // Show/hide cards based on type
+      document.querySelectorAll('.course-card').forEach(card => {
+        if (type === 'all') {
+          card.style.display = '';          // show all
+        } else if (card.dataset.type === type) {
+          card.style.display = '';          // show matching
+        } else {
+          card.style.display = 'none';      // hide non-matching
+        }
+      });
+    }
+
+    /* ═══════════════════════════════════════════════════════════
+       STAGGER ANIMATION on page load
+       Cards animate in one by one with a small delay
+    ═══════════════════════════════════════════════════════════ */
+    document.addEventListener('DOMContentLoaded', function () {
+      // Cards use CSS animation-delay set inline
+      // Nothing extra needed here — pure CSS handles it
+    });
+</script>
+
+</body>
+</html>

@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Browse Courses — Course Hub</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+          --navy:        #1a237e;
+          --blue:        #1565c0;
+          --sky:         #90caf9;
+          --bg:          #f4f6fb;
+          --text:        #1e293b;
+          --muted:       #64748b;
+          --border:      #e2e8f0;
+          --green:       #2e7d32;
+          --green-light: #e8f5e9;
+          --card-shadow:       0 2px 12px rgba(26,35,126,.07);
+          --card-shadow-hover: 0 6px 24px rgba(26,35,126,.14);
+        }
+
+        body { font-family: 'Poppins', sans-serif; background: var(--bg); color: var(--text); font-size: 15px; line-height: 1.6; }
+        a    { text-decoration: none; color: inherit; }
+        ul   { list-style: none; }
+
+        /* ══════════════════════════════════════
+           NAVBAR
+        ══════════════════════════════════════ */
+        .navbar { background: var(--navy); position: sticky; top: 0; z-index: 200; box-shadow: 0 2px 12px rgba(0,0,0,.18); }
+        .nav-inner { max-width: 1200px; margin: 0 auto; padding: 0 28px; height: 64px; display: flex; align-items: center; justify-content: space-between; }
+        .nav-logo  { font-size: 1.4rem; font-weight: 800; color: #fff; letter-spacing: -.5px; }
+        .nav-logo span { color: var(--sky); }
+        .nav-links { display: flex; gap: 28px; }
+        .nav-links a { font-size: .88rem; font-weight: 500; color: rgba(255,255,255,.75); }
+        .nav-links a:hover { color: #fff; }
+        .nav-buttons { display: flex; gap: 10px; }
+        .btn-login {
+          padding: 8px 20px; font-family: 'Poppins', sans-serif; font-size: .85rem; font-weight: 600;
+          color: #fff; background: transparent; border: 1.5px solid rgba(255,255,255,.5);
+          border-radius: 6px; cursor: pointer;
+        }
+        .btn-signup {
+          padding: 8px 20px; font-family: 'Poppins', sans-serif; font-size: .85rem; font-weight: 600;
+          color: var(--navy); background: #fff; border: 1.5px solid #fff;
+          border-radius: 6px; cursor: pointer;
+        }
+
+        /* ══════════════════════════════════════
+           BANNER
+        ══════════════════════════════════════ */
+        .page-banner { background: linear-gradient(135deg, var(--navy) 0%, var(--blue) 100%); padding: 48px 0 36px; color: #fff; }
+        .container   { max-width: 1200px; margin: 0 auto; padding: 0 28px; }
+        .banner-inner { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 24px; }
+        .banner-text h1 { font-size: 2rem; font-weight: 800; margin-bottom: 8px; line-height: 1.2; }
+        .banner-text h1 span { color: var(--sky); }
+        .banner-text p { font-size: .93rem; color: rgba(255,255,255,.72); max-width: 460px; line-height: 1.75; margin-bottom: 20px; }
+        .banner-actions { display: flex; gap: 12px; flex-wrap: wrap; }
+        .btn-banner-primary {
+          padding: 10px 24px; background: #fff; color: var(--navy);
+          font-family: 'Poppins', sans-serif; font-size: .88rem; font-weight: 700;
+          border: none; border-radius: 8px; cursor: pointer;
+        }
+        .btn-banner-outline {
+          padding: 10px 24px; background: transparent; color: #fff;
+          font-family: 'Poppins', sans-serif; font-size: .88rem; font-weight: 600;
+          border: 1.5px solid rgba(255,255,255,.45); border-radius: 8px; cursor: pointer;
+        }
+        .banner-stat { background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.18); border-radius: 12px; padding: 14px 22px; text-align: center; }
+        .banner-stat-num   { display: block; font-size: 2rem; font-weight: 800; color: var(--sky); }
+        .banner-stat-label { font-size: .78rem; color: rgba(255,255,255,.65); }
+        .breadcrumb { display: flex; align-items: center; gap: 8px; font-size: .8rem; color: rgba(255,255,255,.55); padding-top: 16px; }
+        .breadcrumb a { color: rgba(255,255,255,.8); font-weight: 500; }
+        .breadcrumb a:hover { color: #fff; }
+
+        /* ══════════════════════════════════════
+           LOGIN PROMPT
+        ══════════════════════════════════════ */
+        .login-prompt {
+          background: #fffbeb; border: 1.5px solid #fde68a; border-radius: 12px;
+          padding: 14px 20px; display: flex; align-items: center; justify-content: space-between;
+          flex-wrap: wrap; gap: 12px; margin: 28px 0 22px;
+        }
+        .login-prompt-text { font-size: .86rem; color: #78350f; }
+        .login-prompt-text strong { font-weight: 700; }
+        .login-prompt-actions { display: flex; gap: 10px; }
+        .btn-prompt-login {
+          padding: 7px 18px; background: var(--navy); color: #fff;
+          font-family: 'Poppins', sans-serif; font-size: .82rem; font-weight: 600;
+          border: none; border-radius: 7px; cursor: pointer;
+        }
+        .btn-prompt-signup {
+          padding: 7px 18px; background: transparent; color: var(--navy);
+          font-family: 'Poppins', sans-serif; font-size: .82rem; font-weight: 600;
+          border: 1.5px solid var(--navy); border-radius: 7px; cursor: pointer;
+        }
+
+        /* ══════════════════════════════════════
+           SECTION HELPERS
+        ══════════════════════════════════════ */
+        .main { padding: 0 0 64px; }
+        .section-top-row { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-bottom: 22px; }
+        .section-tag   { font-size: .7rem; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; color: var(--blue); display: block; margin-bottom: 4px; }
+        .section-title { font-size: 1.2rem; font-weight: 700; color: var(--text); }
+        .total-label   { font-size: .82rem; color: var(--muted); }
+        .total-label strong { color: var(--navy); font-weight: 700; }
+
+        /* ══════════════════════════════════════
+           COURSE GRID
+           Two column grid — each card is a
+           VERTICAL block card (NOT horizontal flex)
+           This prevents text overflow / overlap
+        ══════════════════════════════════════ */
+        .courses-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+          gap: 20px;
+        }
+
+        /* ══════════════════════════════════════
+           COURSE CARD  — vertical layout
+           Icon row on top, content below, footer pinned at bottom
+           Uses flex-column so nothing overlaps
+        ══════════════════════════════════════ */
+        .course-card {
+          background: #fff;
+          border: 1px solid var(--border);
+          border-radius: 14px;
+          overflow: hidden;
+          box-shadow: var(--card-shadow);
+          transition: box-shadow .22s, transform .18s;
+          /* KEY FIX: vertical column layout — no more horizontal flex */
+          display: flex;
+          flex-direction: column;
+        }
+        .course-card:hover { box-shadow: var(--card-shadow-hover); transform: translateY(-3px); }
+
+        /* Coloured icon banner at the top */
+        .card-thumb {
+          height: 90px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 2.4rem;
+          flex-shrink: 0;
+          position: relative;
+        }
+        /* 6 colour themes — Thymeleaf iterStat.index % 6 picks one */
+        .thumb-c1 { background: linear-gradient(135deg, #bbdefb, #90caf9); }
+        .thumb-c2 { background: linear-gradient(135deg, #e8eaf6, #c5cae9); }
+        .thumb-c3 { background: linear-gradient(135deg, #b2dfdb, #80cbc4); }
+        .thumb-c4 { background: linear-gradient(135deg, #ffe0b2, #ffcc80); }
+        .thumb-c5 { background: linear-gradient(135deg, #fce4ec, #f8bbd0); }
+        .thumb-c6 { background: linear-gradient(135deg, #c8e6c9, #a5d6a7); }
+
+        /* Free / Paid pill on the thumb */
+        .type-pill {
+          position: absolute; top: 10px; right: 10px;
+          font-size: .65rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
+          padding: 3px 10px; border-radius: 20px;
+        }
+        .pill-paid { background: #e3f2fd; color: var(--blue); }
+        .pill-free { background: var(--green-light); color: var(--green); }
+
+        /* Card body — grows to fill available space */
+        .card-body {
+          padding: 16px 18px;
+          display: flex;
+          flex-direction: column;
+          gap: 5px;
+          flex: 1;           /* takes all remaining space above footer */
+        }
+
+        .card-id      { font-size: .68rem; color: #b0bec5; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
+        .card-title   { font-size: .93rem; font-weight: 700; color: var(--text); line-height: 1.38; }
+        .card-trainer { font-size: .78rem; color: var(--muted); }
+        .card-desc    {
+          font-size: .79rem; color: var(--muted); line-height: 1.6;
+          /* clamp description to 2 lines — prevents tall cards */
+          display: -webkit-box;
+          -webkit-line-clamp: 2;
+          -webkit-box-orient: vertical;
+          overflow: hidden;
+          flex: 1;
+        }
+        .card-meta { display: flex; align-items: center; gap: 10px; font-size: .73rem; color: var(--muted); }
+
+        /* Card footer — always at the very bottom */
+        .card-footer {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 12px 18px;
+          border-top: 1px solid var(--border);
+          background: #fafbff;
+          flex-shrink: 0;    /* never shrinks — always visible */
+        }
+        .card-price      { font-size: 1.05rem; font-weight: 800; color: var(--navy); }
+        .card-price-free { font-size: 1.05rem; font-weight: 800; color: var(--green); }
+
+        .btn-enroll {
+          padding: 8px 18px; background: var(--navy); color: #fff;
+          font-family: 'Poppins', sans-serif; font-size: .8rem; font-weight: 600;
+          border: none; border-radius: 7px; cursor: pointer; white-space: nowrap;
+          transition: background .2s;
+        }
+        .btn-enroll:hover { background: var(--blue); }
+
+        /* ══════════════════════════════════════
+           EMPTY STATE
+        ══════════════════════════════════════ */
+        .empty-state {
+          grid-column: 1 / -1;
+          text-align: center; padding: 60px 20px; background: #fff;
+          border: 1.5px dashed var(--border); border-radius: 16px;
+        }
+        .empty-icon { font-size: 2.8rem; margin-bottom: 12px; }
+        .empty-state h3 { font-size: 1rem; font-weight: 700; margin-bottom: 6px; }
+        .empty-state p  { font-size: .84rem; color: var(--muted); }
+
+        /* ══════════════════════════════════════
+           CTA SECTION
+        ══════════════════════════════════════ */
+        .cta-section {
+          background: linear-gradient(135deg, var(--navy), var(--blue));
+          border-radius: 16px; padding: 36px 40px; margin-top: 44px;
+          display: flex; align-items: center; justify-content: space-between;
+          flex-wrap: wrap; gap: 22px;
+        }
+        .cta-text h3 { font-size: 1.2rem; font-weight: 700; color: #fff; margin-bottom: 6px; }
+        .cta-text p  { font-size: .88rem; color: rgba(255,255,255,.72); max-width: 380px; }
+        .cta-buttons { display: flex; gap: 12px; flex-wrap: wrap; }
+        .btn-cta-primary {
+          padding: 11px 28px; background: #fff; color: var(--navy);
+          font-family: 'Poppins', sans-serif; font-size: .9rem; font-weight: 700;
+          border: none; border-radius: 8px; cursor: pointer;
+        }
+        .btn-cta-outline {
+          padding: 11px 28px; background: transparent; color: #fff;
+          font-family: 'Poppins', sans-serif; font-size: .9rem; font-weight: 600;
+          border: 1.5px solid rgba(255,255,255,.45); border-radius: 8px; cursor: pointer;
+        }
+
+        /* ══════════════════════════════════════
+           FOOTER
+        ══════════════════════════════════════ */
+        footer { background: #0f172a; color: #94a3b8; padding: 60px 0 28px; margin-top: 64px; }
+        .footer-grid { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 44px; margin-bottom: 44px; }
+        .footer-logo  { font-size: 1.25rem; font-weight: 700; color: #fff; display: block; margin-bottom: 10px; }
+        .footer-about { font-size: .86rem; line-height: 1.8; max-width: 230px; }
+        .footer-col h5 { font-size: .78rem; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: #fff; margin-bottom: 16px; }
+        .footer-col ul { display: flex; flex-direction: column; gap: 10px; }
+        .footer-col a { font-size: .86rem; color: #94a3b8; }
+        .footer-col a:hover { color: #fff; }
+        .footer-bottom { border-top: 1px solid #1e293b; padding-top: 24px; display: flex; justify-content: space-between; align-items: center; font-size: .82rem; flex-wrap: wrap; gap: 10px; }
+
+        /* ══════════════════════════════════════
+           RESPONSIVE
+        ══════════════════════════════════════ */
+        @media (max-width: 900px) { .footer-grid { grid-template-columns: 1fr 1fr; } }
+        @media (max-width: 768px) {
+          .banner-text h1 { font-size: 1.55rem; }
+          .courses-grid { grid-template-columns: 1fr; }
+          .nav-links { display: none; }
+          .cta-section { flex-direction: column; text-align: center; }
+        }
+        @media (max-width: 480px) {
+          .nav-inner, .container { padding: 0 16px; }
+          .footer-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+
+<!-- ════════════════════════════════════════
+     NAVBAR  (public — no session needed)
+════════════════════════════════════════ -->
+<nav class="navbar">
+    <div class="nav-inner">
+        <a href="/" class="nav-logo">Course<span>Hub</span></a>
+
+        <ul class="nav-links">
+            <li><a href="/#how-it-works">How It Works</a></li>
+            <li><a href="/#features">Features</a></li>
+            <li><a href="/#courses">Courses</a></li>
+        </ul>
+
+        <div class="nav-buttons">
+            <a href="/login"><button class="btn-login">Log In</button></a>
+            <a href="/signup"><button class="btn-signup">Sign Up Free</button></a>
+        </div>
+    </div>
+</nav>
+
+<!-- ════════════════════════════════════════
+     BANNER
+════════════════════════════════════════ -->
+<div class="page-banner">
+    <div class="container">
+        <div class="banner-inner">
+
+            <div class="banner-text">
+                <h1>Browse <span>All Courses</span></h1>
+                <p>Explore every course available on Course Hub. Sign up for free and start learning from expert trainers today.</p>
+                <div class="banner-actions">
+                    <a href="/signup"><button class="btn-banner-primary">🎓 Sign Up Free</button></a>
+                    <a href="/login"><button class="btn-banner-outline">Log In</button></a>
+                </div>
+            </div>
+
+            <!--
+              th:text="${#lists.size(courses)}"
+              Shows total number of courses from database.
+              #lists.size(courses) = courses.size() in Java.
+            -->
+            <div class="banner-stat">
+                <span class="banner-stat-num" th:text="${#lists.size(courses)}">0</span>
+                <div class="banner-stat-label">Courses Available</div>
+            </div>
+
+        </div>
+
+        <div class="breadcrumb">
+            <a href="/">Home</a>
+            <span>›</span>
+            <span>All Courses</span>
+        </div>
+    </div>
+</div>
+
+<!-- ════════════════════════════════════════
+     MAIN
+════════════════════════════════════════ -->
+<main class="main">
+    <div class="container">
+
+        <!-- Login prompt — always visible on this public page -->
+        <div class="login-prompt">
+            <div class="login-prompt-text">
+                🔒 <strong>Want to enroll?</strong> Create a free account or log in to access any course.
+            </div>
+            <div class="login-prompt-actions">
+                <a href="/login"><button class="btn-prompt-login">Log In</button></a>
+                <a href="/signup"><button class="btn-prompt-signup">Sign Up Free</button></a>
+            </div>
+        </div>
+
+        <div class="section-top-row">
+            <div>
+                <span class="section-tag">📚 Catalogue</span>
+                <h2 class="section-title">All Available Courses</h2>
+            </div>
+            <!--
+              th:text="${#lists.size(courses)}"
+              Shows the same count in the toolbar row.
+            -->
+            <div class="total-label">
+                Total: <strong th:text="${#lists.size(courses)}">0</strong> courses
+            </div>
+        </div>
+
+        <!-- ════════════════════════════════════════
+             COURSE GRID
+             ─────────────────────────────────────
+             HOW THIS LOOP WORKS:
+             th:each="course : ${courses}"
+               - courses   = List<Course> sent by NavController via model
+               - course    = one Course object in the current iteration
+               - Thymeleaf repeats the entire <div class="course-card"> block
+                 once per course row in the database
+
+             th:if / th:unless:
+               - th:if="${condition}"     renders element only when TRUE
+               - th:unless="${condition}" renders element only when FALSE
+               - Used here to show FREE or PAID pill and price correctly
+
+             iterStat.index % 6:
+               - iterStat is Thymeleaf's loop status variable
+               - .index gives the current position (0, 1, 2, 3, ...)
+               - % 6 gives remainder (0,1,2,3,4,5,0,1,2...) to cycle colours
+        ════════════════════════════════════════ -->
+        <div class="courses-grid">
+
+            <!-- ── EMPTY STATE — shown when database has no courses ── -->
+            <!--
+              th:if="${#lists.isEmpty(courses)}"
+              #lists.isEmpty(courses) = courses.isEmpty() in Java = true when list has 0 items
+            -->
+            <div class="empty-state" th:if="${#lists.isEmpty(courses)}">
+                <div class="empty-icon">📭</div>
+                <h3>No Courses Available Yet</h3>
+                <p>Trainers are still creating content. Check back soon!</p>
+            </div>
+
+            <!-- ── DYNAMIC COURSE CARDS — one card per course in database ── -->
+            <!--
+              th:each="course, iterStat : ${courses}"
+                course    = current Course object
+                iterStat  = loop status (index, count, first, last, etc.)
+
+              th:unless="${#lists.isEmpty(courses)}"
+                Only renders these cards when the list is NOT empty.
+                Works as the opposite of the empty state above.
+            -->
+            <div class="course-card"
+                 th:each="course, iterStat : ${courses}"
+                 th:unless="${#lists.isEmpty(courses)}">
+
+                <!--
+                  COLOUR THUMB BANNER
+                  iterStat.index % 6 cycles through 0,1,2,3,4,5,0,1,2...
+                  We use th:classappend to add one of the 6 colour classes.
+                  th:classappend adds a class ON TOP of the existing class.
+                -->
+                <div class="card-thumb"
+                     th:classappend="${iterStat.index % 6 == 0} ? 'thumb-c1' :
+                              (${iterStat.index % 6 == 1} ? 'thumb-c2' :
+                              (${iterStat.index % 6 == 2} ? 'thumb-c3' :
+                              (${iterStat.index % 6 == 3} ? 'thumb-c4' :
+                              (${iterStat.index % 6 == 4} ? 'thumb-c5' : 'thumb-c6'))))">
+
+                    <!-- Static emoji icon — you can make this dynamic later -->
+                    📘
+
+                    <!--
+                      PAID / FREE PILL
+                      th:if="${course.courseType == 'free'}"   → show green FREE pill
+                      th:unless="${course.courseType == 'free'}"→ show blue PAID pill
+                      courseType comes from Course.getCourseType() in Java
+                    -->
+                    <span class="type-pill pill-free"
+                          th:if="${course.courseType == 'free'}">Free</span>
+                    <span class="type-pill pill-paid"
+                          th:unless="${course.courseType == 'free'}">Paid</span>
+                </div>
+
+                <!-- CARD BODY -->
+                <div class="card-body">
+
+                    <!--
+                      COURSE ID
+                      th:text="'ID: ' + ${course.courseId}"
+                      course.courseId = Course.getCourseId() in Java
+                    -->
+                    <div class="card-id" th:text="'ID: ' + ${course.courseId}">ID: JAVA101</div>
+
+                    <!--
+                      COURSE NAME
+                      th:text="${course.courseName}"
+                      course.courseName = Course.getCourseName() in Java
+                    -->
+                    <div class="card-title" th:text="${course.courseName}">Course Name</div>
+
+                    <!--
+                      TRAINER NAME
+                      th:text="'By ' + ${course.trainerName}"
+                      Prepends "By " before the trainer's name string
+                    -->
+                    <div class="card-trainer" th:text="'By ' + ${course.trainerName}">By Trainer Name</div>
+
+                    <!--
+                      SHORT DESCRIPTION
+                      th:text="${course.courseShortDescription}"
+                      CSS clamps this to 2 lines so cards stay uniform height
+                    -->
+                    <div class="card-desc" th:text="${course.courseShortDescription}">Course description goes here.</div>
+
+                    <!--
+                      LESSON COUNT
+                      th:text="${#lists.size(course.lessons)} + ' Lessons'"
+                      course.lessons = Course.getLessons() → List<Lesson>
+                      #lists.size() counts how many Lesson objects are in that list
+                    -->
+                    <div class="card-meta">
+                        <span th:text="${#lists.size(course.lessons)} + ' Lessons'">0 Lessons</span>
+                    </div>
+
+                </div><!-- /card-body -->
+
+                <!-- CARD FOOTER — price + enroll button -->
+                <div class="card-footer">
+
+                    <!--
+                      PRICE DISPLAY
+                      Two cases handled with th:if / th:unless:
+
+                      CASE 1 — Free course:
+                        th:if="${course.courseType == 'free'}"
+                        Shows green "Free" text
+
+                      CASE 2 — Paid course:
+                        th:unless="${course.courseType == 'free'}"
+                        th:text="'₹' + ${course.coursePrice}"
+                        Prepends ₹ symbol before the price number from DB
+                    -->
+                    <div class="card-price-free"
+                         th:if="${course.courseType == 'free'}">Free</div>
+
+                    <div class="card-price"
+                         th:unless="${course.courseType == 'free'}"
+                         th:text="'₹' + ${course.coursePrice}">₹999</div>
+
+                    <!--
+                      ENROLL BUTTON → goes to /login
+                      This is a PUBLIC page — visitor is not logged in.
+                      Clicking Enroll takes them to login page.
+                      After successful login, Spring redirects to /student-home.
+                    -->
+                    <a href="/login">
+                        <button class="btn-enroll">Enroll Now</button>
+                    </a>
+
+                </div><!-- /card-footer -->
+
+            </div><!-- /course-card (th:each loop ends here) -->
+
+        </div><!-- /courses-grid -->
+
+        <!-- CTA SECTION -->
+        <div class="cta-section">
+            <div class="cta-text">
+                <h3>🚀 Ready to start learning?</h3>
+                <p>Create a free account in under a minute and enroll in any course today. No credit card needed.</p>
+            </div>
+            <div class="cta-buttons">
+                <a href="/signup"><button class="btn-cta-primary">Create Free Account</button></a>
+                <a href="/login"><button class="btn-cta-outline">Log In</button></a>
+            </div>
+        </div>
+
+    </div>
+</main>
+
+<!-- ════════════════════════════════════════
+     FOOTER
+════════════════════════════════════════ -->
+<footer>
+    <div class="container">
+        <div class="footer-grid">
+            <div>
+                <a href="/" class="footer-logo">CourseHub</a>
+                <p class="footer-about">An online learning platform connecting expert trainers with students who want to grow their skills and career.</p>
+            </div>
+            <div class="footer-col">
+                <h5>Platform</h5>
+                <ul>
+                    <li><a href="/public-courses">Browse Courses</a></li>
+                    <li><a href="/signup">Become a Trainer</a></li>
+                    <li><a href="#">Certificates</a></li>
+                </ul>
+            </div>
+            <div class="footer-col">
+                <h5>Account</h5>
+                <ul>
+                    <li><a href="/login">Log In</a></li>
+                    <li><a href="/signup">Sign Up Free</a></li>
+                </ul>
+            </div>
+            <div class="footer-col">
+                <h5>Support</h5>
+                <ul>
+                    <li><a href="#">Help Center</a></li>
+                    <li><a href="#">Terms of Service</a></li>
+                    <li><a href="#">Privacy Policy</a></li>
+                </ul>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <span>© 2026 Course Hub. All rights reserved.</span>
+            <span>Built with Spring Boot &amp; Thymeleaf</span>
+        </div>
+    </div>
+</footer>
+
+</body>
+</html>

@@ -1,0 +1,891 @@
+<!DOCTYPE html>
+<!--
+╔══════════════════════════════════════════════════════════════════════════╗
+║                    student_all_courses.html  —  STUDENT VIEW                    ║
+║                  Shows ALL courses from the database                    ║
+╠══════════════════════════════════════════════════════════════════════════╣
+║                                                                          ║
+║  HOW THIS PAGE WORKS  (Browser → Controller → Service → DB)             ║
+║  ─────────────────────────────────────────────────────────────          ║
+║                                                                          ║
+║  1.  Student clicks "View All Courses" on student-home.html             ║
+║  2.  Browser sends GET /all-courses to Spring Boot                      ║
+║  3.  NavController.allCourses() handles the request                     ║
+║  4.  It calls TrainerService.getAllCourses()                             ║
+║  5.  TrainerServiceImplementation calls cRepo.findAll()                 ║
+║  6.  JPA fetches EVERY row from the 'course' table in MySQL             ║
+║  7.  The List<Course> is put in the Model as "courses"                  ║
+║  8.  Thymeleaf receives the model and renders this template             ║
+║  9.  th:each loops → one card rendered per Course object                ║
+║                                                                          ║
+║  WHAT YOU NEED TO ADD / CHANGE IN BACKEND                               ║
+║  ────────────────────────────────────────                                ║
+║                                                                          ║
+║  ── TrainerService.java  (interface) ──                                  ║
+║     Add this method signature:                                           ║
+║       List<Course> getAllCourses();                                      ║
+║                                                                          ║
+║  ── TrainerServiceImplementation.java ──                                 ║
+║     Add this implementation:                                             ║
+║       @Override                                                          ║
+║       public List<Course> getAllCourses() {                              ║
+║           return cRepo.findAll();                                        ║
+║       }                                                                  ║
+║     NOTE: findAll() already exists in JpaRepository — no extra code     ║
+║                                                                          ║
+║  ── NavController.java ──                                                ║
+║     Add these imports at the top of the file:                            ║
+║       import com.example.Course.Hub.ENTITY.Course;                      ║
+║       import com.example.Course.Hub.SERVICES.Trainer.TrainerService;    ║
+║       import org.springframework.beans.factory.annotation.Autowired;    ║
+║       import org.springframework.ui.Model;                              ║
+║       import java.util.List;                                             ║
+║                                                                          ║
+║     Add field injection inside NavController class:                      ║
+║       @Autowired                                                         ║
+║       TrainerService tService;                                           ║
+║                                                                          ║
+║     Add the route method:                                                ║
+║       @GetMapping("/all-courses")                                        ║
+║       public String allCourses(Model model) {                           ║
+║           List<Course> courses = tService.getAllCourses();               ║
+║           model.addAttribute("courses", courses);                       ║
+║           return "Home/all_Courses";                                     ║
+║       }                                                                  ║
+║                                                                          ║
+║  ── File location ──                                                     ║
+║     Save this file as:                                                   ║
+║       src/main/resources/templates/Home/student_all_courses.html                ║
+║                                                                          ║
+╚══════════════════════════════════════════════════════════════════════════╝
+
+
+
+
+╔══════════════════════════════════════════════════════════════════════════╗
+║                student_all_courses.html  —  STUDENT COURSE LISTING              ║
+╠══════════════════════════════════════════════════════════════════════════╣
+║  BACKEND NEEDED:                                                         ║
+║  NavController.allCourses(HttpSession session, Model model)              ║
+║    List<Course> courses = tService.getAllCourses();                      ║
+║    model.addAttribute("courses", courses);                              ║
+║    // Cart count for navbar badge:                                       ║
+║    Object cart = session.getAttribute("cart");                          ║
+║    int count = (cart instanceof List) ? ((List)cart).size() : 0;        ║
+║    model.addAttribute("cartCount", count);                              ║
+║    return "Home/all_Courses";                                            ║
+╚══════════════════════════════════════════════════════════════════════════╝
+
+
+
+
+
+
+
+
+
+
+
+╔══════════════════════════════════════════════════════════════════════════════╗
+║               student_all_courses.html  —  STUDENT COURSE LISTING (Logged In)      ║
+╠══════════════════════════════════════════════════════════════════════════════╣
+║                                                                              ║
+║  ┌─────────────────────────────────────────────────────────────────────┐    ║
+║  │                    BACKEND DATA FLOW                                │    ║
+║  │                                                                     │    ║
+║  │  1. Logged-in student clicks "Browse All Courses"                  │    ║
+║  │  2. Browser sends GET /all-courses                                  │    ║
+║  │  3. TrainerController.allCourses(session, model) handles it         │    ║
+║  │  4. Calls TrainerService.getAllCourses()                            │    ║
+║  │  5. JPA: SELECT * FROM course                                       │    ║
+║  │  6. Returns List<Course> → model.addAttribute("courses", courses)  │    ║
+║  │  7. Cart count read from session → model.addAttribute("cartCount") │    ║
+║  │  8. Thymeleaf renders this page                                     │    ║
+║  └─────────────────────────────────────────────────────────────────────┘    ║
+║                                                                              ║
+║  ┌─────────────────────────────────────────────────────────────────────┐    ║
+║  │            TrainerController.java  —  allCourses route              │    ║
+║  │                                                                     │    ║
+║  │  @GetMapping("/all-courses")                                        │    ║
+║  │  public String allCourses(HttpSession session, Model model) {       │    ║
+║  │                                                                     │    ║
+║  │      // 1. Fetch all courses from DB                                │    ║
+║  │      List<Course> courses = tService.getAllCourses();               │    ║
+║  │      model.addAttribute("courses", courses);                        │    ║
+║  │                                                                     │    ║
+║  │      // 2. Cart count for navbar badge                              │    ║
+║  │      Object cart = session.getAttribute("cart");                    │    ║
+║  │      int count = (cart instanceof List) ?                           │    ║
+║  │                  ((List)cart).size() : 0;                           │    ║
+║  │      model.addAttribute("cartCount", count);                        │    ║
+║  │                                                                     │    ║
+║  │      return "Home/all_Courses";                                     │    ║
+║  │  }                                                                  │    ║
+║  └─────────────────────────────────────────────────────────────────────┘    ║
+║                                                                              ║
+║  THYMELEAF FIELDS USED:                                                      ║
+║  ${courses}                         → List<Course> from model               ║
+║  ${cartCount}                       → number of items in session cart       ║
+║  ${session.user.firstname}          → logged-in student first name          ║
+║  th:each="course,iter : ${courses}" → loop (iter for index/colors)          ║
+║  ${course.courseName}               → course name                           ║
+║  ${course.courseShortDescription}   → short description                     ║
+║  ${course.trainerName}              → trainer's name (shown in bold)        ║
+║  ${course.coursePrice}              → price string                           ║
+║  ${course.courseType}               → "free" or "paid"                       ║
+║  ${#lists.size(course.lessons)}     → lesson count                          ║
+║  ${#lists.isEmpty(courses)}         → true when no courses exist            ║
+║                                                                              ║
+║  NOTE: Course ID is intentionally NOT shown in the card UI.                ║
+║        It is used ONLY in href links for routing:                           ║
+║          /cart/add?courseId=...                                              ║
+║          /course-details/{courseId}                                         ║
+║        Never displayed to the student — it's a DB key, not user content.   ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+-->
+
+
+
+
+
+
+
+<!--
+╔══════════════════════════════════════════════════════════════════════════════╗
+║             student_all_courses.html — STUDENT COURSE CATALOGUE              ║
+╠══════════════════════════════════════════════════════════════════════════════╣
+║                                                                              ║
+║  NEW FEATURES:                                                               ║
+║  1. Smaller, compact cards (3-col grid)                                      ║
+║  2. "Already in Cart" — disables Add button if course is in cart            ║
+║  3. "Go to Course" — shows if already enrolled/purchased                     ║
+║  4. Filter tabs (All / Free / Paid)                                          ║
+║                                                                              ║
+║  BACKEND NEEDED — TrainerController.java (update existing method):           ║
+║                                                                              ║
+║  @GetMapping("/all-courses")                                                 ║
+║  public String allCourses(HttpSession session, Model model) {                ║
+║                                                                              ║
+║      // 1. All courses for display                                           ║
+║      List<Course> courses = tService.getAllCourses();                        ║
+║      model.addAttribute("courses", courses);                                 ║
+║                                                                              ║
+║      // 2. Cart course IDs (to check "already in cart")                     ║
+║      List<Course> cart = getCart(session);                                   ║
+║      List<String> cartIds = cart.stream()                                    ║
+║          .map(Course::getCourseId).collect(Collectors.toList());             ║
+║      model.addAttribute("cartIds", cartIds);                                 ║
+║                                                                              ║
+║      // 3. Enrolled course IDs (to check "already purchased")               ║
+║      Object enrolled = session.getAttribute("enrolledCourses");             ║
+║      List<Course> enrolledList = (enrolled instanceof List) ?               ║
+║                                   (List<Course>) enrolled :                 ║
+║                                   new ArrayList<>();                         ║
+║      List<String> enrolledIds = enrolledList.stream()                       ║
+║          .map(Course::getCourseId).collect(Collectors.toList());             ║
+║      model.addAttribute("enrolledIds", enrolledIds);                        ║
+║                                                                              ║
+║      // 4. Cart count for navbar                                             ║
+║      model.addAttribute("cartCount", cart.size());                          ║
+║                                                                              ║
+║      return "Course/student_all_courses";                                    ║
+║  }                                                                           ║
+║                                                                              ║
+║  ADD IMPORT at top of TrainerController.java:                                ║
+║    import java.util.stream.Collectors;                                       ║
+║                                                                              ║
+║  ADD HELPER METHOD in TrainerController.java:                                ║
+║    private List<Course> getCart(HttpSession session) {                       ║
+║        Object obj = session.getAttribute("cart");                            ║
+║        if (obj instanceof List) return (List<Course>) obj;                  ║
+║        return new ArrayList<>();                                             ║
+║    }                                                                         ║
+║                                                                              ║
+║  THYMELEAF FIELDS:                                                           ║
+║  ${courses}     → List<Course> all courses                                   ║
+║  ${cartIds}     → List<String> courseIds currently in cart                   ║
+║  ${enrolledIds} → List<String> courseIds already purchased                   ║
+║                                                                              ║
+║  BUTTON LOGIC:                                                               ║
+║  If course.courseId is in enrolledIds:                                       ║
+║    → Show "Go to Course" button (green) → links to /my-courses              ║
+║  Else if course.courseId is in cartIds:                                      ║
+║    → Show "In Cart" button (disabled) → links to /cart                      ║
+║  Else:                                                                       ║
+║    → Show "Add to Cart" button → /cart/add?courseId=...                     ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+-->
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>All Courses — Course Hub</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&family=Playfair+Display:wght@700;800;900&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+      --midnight:  #0c0e1a; --navy: #0f172a;
+      --blue-deep: #1e3a8a; --blue: #2563eb; --blue-lt: #3b82f6; --blue-soft: #eff6ff;
+      --gold:      #f59e0b; --gold-pale: #fef3c7;
+      --bg:        #f4f7ff; --card: #ffffff; --surface-2: #f8faff; --surface-3: #eef2ff;
+      --tx: #0f172a; --tx-2: #374151; --tx-3: #6b7280; --tx-4: #9ca3af;
+      --bd: #e5e7eb; --bd-2: #f0f2f9;
+      --green: #059669; --green-bg: #ecfdf5; --red: #dc2626;
+      --amber: #d97706; --amber-bg: #fffbeb;
+      --sh-sm: 0 1px 4px rgba(15,23,42,.05);
+      --sh-md: 0 4px 16px rgba(30,58,138,.08);
+      --sh-lg: 0 12px 36px rgba(30,58,138,.13);
+      --sh-xl: 0 24px 64px rgba(30,58,138,.18);
+      --ff-head: 'Playfair Display', Georgia, serif;
+      --ff-body: 'DM Sans', system-ui, sans-serif;
+      --r-sm: 8px; --r: 12px;  --rl:18px;     --r-lg: 16px; --r-xl: 22px;
+      --ease: .2s cubic-bezier(.4,0,.2,1);
+    }
+    body { font-family: var(--ff-body); background: var(--bg); color: var(--tx); font-size: 15px; line-height: 1.6; }
+    a { text-decoration: none; color: inherit; }
+    ul { list-style: none; }
+
+    /* ═══════════════════════════════════════════════════
+       NAVBAR — same as all other pages
+    ═══════════════════════════════════════════════════ */
+    .navbar {
+      background: var(--midnight); position: sticky; top: 0; z-index: 500;
+      box-shadow: 0 1px 0 rgba(255,255,255,.05), 0 4px 20px rgba(0,0,0,.3);
+    }
+    .nav-inner {
+      max-width: 1240px; margin: 0 auto; padding: 0 28px;
+      height: 66px; display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    }
+    .nav-logo {
+      display: flex; align-items: center; gap: 9px;
+      font-family: var(--ff-head); font-size: 1.45rem; font-weight: 900; color: #fff; letter-spacing: -.03em; flex-shrink: 0;
+    }
+    .logo-mark { width: 32px; height: 32px; background: var(--gold); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: .9rem; }
+    .nav-links { display: flex; align-items: center; gap: 2px; }
+    .nav-links a {
+      font-size: .87rem; font-weight: 500; color: rgba(255,255,255,.6);
+      padding: 7px 13px; border-radius: var(--r-sm); transition: all var(--ease);
+    }
+    .nav-links a:hover, .nav-links a.active { color: #fff; background: rgba(255,255,255,.08); }
+    .nav-links a.active { color: var(--gold); }
+
+    <!--.nav-right { display: flex; align-items: center; gap: 10px; }-->
+    .nav-right{display:flex;align-items:center;gap:10px;position:relative}
+
+    <!--.nav-badge { background: rgba(255,255,255,.1); color: #93c5fd; font-size: .73rem; font-weight: 600; padding: 4px 11px; border-radius: 20px; }-->
+
+    .nav-badge{background:rgba(245,158,11,.18);color:var(--gold);font-size:.71rem;font-weight:700;padding:3px 10px;border-radius:20px;border:1px solid rgba(245,158,11,.3)}
+
+    .nav-name { font-size: .83rem; color: rgba(255,255,255,.72); font-weight: 500; }
+
+
+
+    .cart-wrap { position: relative; }
+    .btn-cart {
+      display: flex; align-items: center; gap: 6px;
+      padding: 8px 16px; font-family: var(--ff-body); font-size: .84rem; font-weight: 600;
+      color: #fff; background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.2);
+      border-radius: var(--r-sm); cursor: pointer; transition: all var(--ease);
+    }
+    .btn-cart:hover { background: rgba(255,255,255,.18); }
+    .cart-badge {
+      position: absolute; top: -6px; right: -6px;
+      background: var(--red); color: #fff; font-size: .62rem; font-weight: 800;
+      width: 18px; height: 18px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    }
+    .btn-nav-ghost {
+      padding: 8px 16px; font-family: var(--ff-body); font-size: .84rem; font-weight: 600;
+      color: rgba(255,255,255,.8); background: rgba(255,255,255,.08);
+      border: 1px solid rgba(255,255,255,.15); border-radius: var(--r-sm); cursor: pointer; transition: all var(--ease);
+    }
+    .btn-nav-ghost:hover { background: rgba(255,255,255,.16); color: #fff; }
+    .btn-logout {
+      padding: 8px 18px; font-family: var(--ff-body); font-size: .84rem; font-weight: 700;
+      color: var(--midnight); background: var(--gold); border: none; border-radius: var(--r-sm); cursor: pointer;
+    }
+
+.btn-menu{display:flex;align-items:center;gap:7px;padding:7px 16px;font-family:var(--fb);font-size:.83rem;font-weight:700;background:var(--gold);color:var(--midnight);border:none;border-radius:8px;cursor:pointer;transition:all var(--ease)}
+.btn-menu:hover{background:#fbbf24;transform:translateY(-1px)}
+
+
+
+    /* DROPDOWN */
+.menu-dd{position:absolute;top:calc(100% + 12px);right:0;background:var(--card);border:1px solid var(--bd);border-radius:var(--rl);box-shadow:var(--sh-xl);min-width:240px;padding:8px 0;z-index:600;display:none;animation:menuIn .18s ease}
+@keyframes menuIn{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
+.menu-dd.open{display:block}
+.menu-ui{padding:14px 18px 12px;border-bottom:1px solid var(--bd);margin-bottom:4px}
+.menu-uname{font-size:.92rem;font-weight:700;color:var(--tx);margin-bottom:2px}
+.menu-uemail{font-size:.76rem;color:var(--tx3)}
+.menu-urole{display:inline-block;background:var(--gold-p);color:#92400e;font-size:.67rem;font-weight:700;padding:2px 8px;border-radius:10px;margin-top:4px}
+.mi{display:flex;align-items:center;gap:12px;padding:10px 18px;font-size:.86rem;font-weight:500;color:var(--tx);cursor:pointer;transition:background var(--ease)}
+.mi:hover{background:var(--s3);color:var(--deep)}
+.mi.danger{color:var(--red)}.mi.danger:hover{background:var(--rbg)}
+.mi.current{background:var(--s3);color:var(--deep);font-weight:600}
+.mi-icon{font-size:1rem;width:22px;text-align:center;flex-shrink:0}
+.menu-div{border:none;border-top:1px solid var(--bd);margin:5px 0}
+
+
+
+
+
+
+
+
+
+
+
+
+    /* ═══════════════════════════════════════════════════
+       HERO BANNER
+    ═══════════════════════════════════════════════════ */
+    .hero {
+      background: var(--midnight);
+      background-image:
+        radial-gradient(ellipse 80% 60% at 70% 50%, rgba(37,99,235,.26) 0%, transparent 60%),
+        radial-gradient(ellipse 40% 50% at 10% 80%, rgba(245,158,11,.12) 0%, transparent 55%),
+        linear-gradient(160deg, #0d0f1a 0%, #111827 100%);
+      padding: 56px 0 44px; color: #fff; position: relative; overflow: hidden;
+    }
+    .hero::before {
+      content: ''; position: absolute; inset: 0;
+      background-image:
+        linear-gradient(rgba(255,255,255,.025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,.025) 1px, transparent 1px);
+      background-size: 60px 60px; pointer-events: none;
+    }
+    .container { max-width: 1240px; margin: 0 auto; padding: 0 28px; position: relative; z-index: 1; }
+    .breadcrumb { display: flex; align-items: center; gap: 8px; font-size: .78rem; color: rgba(255,255,255,.45); margin-bottom: 22px; }
+    .breadcrumb a { color: rgba(255,255,255,.7); font-weight: 500; }
+    .hero-layout { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 24px; }
+    .hero-label {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: rgba(245,158,11,.15); border: 1px solid rgba(245,158,11,.3);
+      color: var(--gold); font-size: .73rem; font-weight: 700; letter-spacing: .09em;
+      text-transform: uppercase; padding: 5px 14px; border-radius: 30px; margin-bottom: 16px;
+    }
+    .hero-title { font-family: var(--ff-head); font-size: 2.8rem; font-weight: 900; line-height: 1.1; letter-spacing: -.04em; margin-bottom: 12px; }
+    .hero-title .acc { color: var(--gold); }
+    .hero-sub { font-size: .92rem; color: rgba(255,255,255,.65); max-width: 480px; line-height: 1.78; }
+    .hero-stats { display: flex; gap: 14px; flex-wrap: wrap; }
+    .hstat {
+      background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.12);
+      border-radius: var(--r-lg); padding: 14px 20px; text-align: center; min-width: 100px;
+    }
+    .hstat-num { display: block; font-family: var(--ff-head); font-size: 1.7rem; font-weight: 900; color: var(--gold); line-height: 1; margin-bottom: 4px; }
+    .hstat-label { font-size: .7rem; color: rgba(255,255,255,.55); font-weight: 500; }
+
+    /* ═══════════════════════════════════════════════════
+       MAIN
+    ═══════════════════════════════════════════════════ */
+    .main { padding: 36px 0 72px; }
+
+    /* TOOLBAR */
+    .toolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 14px; margin-bottom: 22px; }
+    .toolbar-tag { font-size: .7rem; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; color: var(--blue); margin-bottom: 3px; }
+    .toolbar-title { font-family: var(--ff-head); font-size: 1.5rem; font-weight: 700; color: var(--tx); letter-spacing: -.02em; }
+    .toolbar-right { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .count-chip {
+      background: var(--blue-deep); color: #fff;
+      font-size: .78rem; font-weight: 700; padding: 5px 14px; border-radius: 20px;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .back-link { font-size: .84rem; font-weight: 600; color: var(--blue); }
+    .back-link:hover { color: var(--blue-deep); text-decoration: underline; }
+
+    /* FILTER TABS */
+    .filter-bar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 26px; }
+    .filter-tab {
+      padding: 7px 18px; font-family: var(--ff-body); font-size: .82rem; font-weight: 600;
+      color: var(--tx-3); background: var(--card); border: 1.5px solid var(--bd);
+      border-radius: 30px; cursor: pointer; transition: all var(--ease);
+    }
+    .filter-tab:hover { border-color: var(--blue); color: var(--blue); }
+    .filter-tab.active { background: var(--blue-deep); border-color: var(--blue-deep); color: #fff; }
+
+    /* ═══════════════════════════════════════════════════
+       COURSE GRID — 3 columns, compact cards
+    ═══════════════════════════════════════════════════ */
+    .courses-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 18px;
+    }
+
+    /* ═══════════════════════════════════════════════════
+       COMPACT COURSE CARD
+       Smaller than before — 3 col layout, clean design
+    ═══════════════════════════════════════════════════ */
+    .course-card {
+      background: var(--card); border: 1px solid var(--bd-2); border-radius: var(--r-xl);
+      overflow: hidden; box-shadow: var(--sh-sm);
+      transition: transform var(--ease), box-shadow var(--ease), border-color var(--ease);
+      display: flex; flex-direction: column;
+      animation: cardIn .45s ease both;
+    }
+    @keyframes cardIn { from{opacity:0;transform:translateY(14px)} to{opacity:1;transform:translateY(0)} }
+    .course-card:hover { transform: translateY(-4px); box-shadow: var(--sh-lg); border-color: rgba(37,99,235,.18); }
+
+    /* ── Compact colour band — shorter height ── */
+    .card-band {
+      height: 80px; display: flex; align-items: center; padding: 0 18px;
+      position: relative; overflow: hidden; flex-shrink: 0;
+    }
+    .card-band::after {
+      content: ''; position: absolute; right: -12px; top: -12px;
+      width: 80px; height: 80px; border-radius: 50%; background: rgba(255,255,255,.13);
+    }
+    .bc1{background:linear-gradient(135deg,#1e3a8a,#2563eb);}
+    .bc2{background:linear-gradient(135deg,#064e3b,#10b981);}
+    .bc3{background:linear-gradient(135deg,#6d28d9,#a78bfa);}
+    .bc4{background:linear-gradient(135deg,#92400e,#f59e0b);}
+    .bc5{background:linear-gradient(135deg,#9f1239,#f43f5e);}
+    .bc6{background:linear-gradient(135deg,#0c4a6e,#0ea5e9);}
+    .card-emoji { font-size: 1.8rem; position: relative; z-index: 1; filter: drop-shadow(0 2px 5px rgba(0,0,0,.22)); }
+    .type-pill {
+      position: absolute; top: 8px; right: 8px;
+      font-size: .6rem; font-weight: 800; text-transform: uppercase; letter-spacing: .07em;
+      padding: 3px 8px; border-radius: 20px; z-index: 2;
+    }
+    .pill-free { background: rgba(16,185,129,.9); color: #fff; }
+    .pill-paid { background: rgba(255,255,255,.93); color: var(--blue-deep); }
+
+    /* ── Card body — compact spacing ── */
+    .card-body { padding: 14px 16px 12px; flex: 1; display: flex; flex-direction: column; gap: 5px; }
+    .card-name {
+      font-size: .88rem; font-weight: 700; color: var(--tx); line-height: 1.38;
+      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+    }
+    /* Trainer name BOLD */
+    .card-trainer { font-size: .77rem; font-weight: 700; color: var(--blue); display: flex; align-items: center; gap: 5px; }
+    .card-desc {
+      font-size: .75rem; color: var(--tx-3); line-height: 1.55; flex: 1;
+      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+    }
+    .card-meta { font-size: .7rem; color: var(--tx-4); margin-top: 2px; }
+
+    /* ── Card footer — compact ── */
+    .card-footer {
+      padding: 10px 16px 14px; border-top: 1px solid var(--bd-2);
+      display: flex; flex-direction: column; gap: 8px; flex-shrink: 0;
+    }
+    .price-row { display: flex; align-items: center; justify-content: space-between; }
+    .price-free { font-family: var(--ff-head); font-size: 1rem; font-weight: 900; color: var(--green); }
+    .price-paid { font-family: var(--ff-head); font-size: 1rem; font-weight: 900; color: var(--blue-deep); }
+    .price-sub { font-size: .67rem; color: var(--tx-4); }
+
+    /* ── BUTTON ROW — all 3 states in same place ── */
+    .btn-row { display: flex; gap: 7px; }
+
+    /*
+      STATE 1: ADD TO CART (default — course not in cart, not purchased)
+      THYMELEAF:
+        th:unless="${enrolledIds.contains(course.courseId) or cartIds.contains(course.courseId)}"
+        th:href="@{/cart/add(courseId=${course.courseId})}"
+    */
+    .btn-add-cart {
+      flex: 1; padding: 8px 10px; font-family: var(--ff-body); font-size: .76rem; font-weight: 700;
+      color: var(--blue-deep); background: var(--blue-soft); border: 1.5px solid #bfdbfe;
+      border-radius: var(--r-sm); cursor: pointer; transition: all var(--ease); text-align: center; white-space: nowrap;
+    }
+    .btn-add-cart:hover { background: var(--blue-deep); color: #fff; border-color: var(--blue-deep); }
+
+    /*
+      STATE 2: ALREADY IN CART (disabled button)
+      THYMELEAF:
+        th:if="${cartIds.contains(course.courseId) and !enrolledIds.contains(course.courseId)}"
+        Links to /cart so student can go review their cart
+    */
+    .btn-in-cart {
+      flex: 1; padding: 8px 10px; font-family: var(--ff-body); font-size: .76rem; font-weight: 700;
+      color: var(--amber); background: var(--amber-bg); border: 1.5px solid #fcd34d;
+      border-radius: var(--r-sm); cursor: pointer; transition: all var(--ease); text-align: center; white-space: nowrap;
+    }
+    .btn-in-cart:hover { background: #fef3c7; }
+
+    /*
+      STATE 3: ALREADY ENROLLED (purchased — go to My Courses)
+      THYMELEAF:
+        th:if="${enrolledIds.contains(course.courseId)}"
+        Links to /my-courses so student can start watching
+    */
+    .btn-enrolled {
+      flex: 1; padding: 8px 10px; font-family: var(--ff-body); font-size: .76rem; font-weight: 700;
+      color: #fff; background: var(--green); border: none;
+      border-radius: var(--r-sm); cursor: pointer; transition: all var(--ease); text-align: center; white-space: nowrap;
+    }
+    .btn-enrolled:hover { background: #047857; }
+
+    /* DETAILS button — always shown */
+    .btn-details {
+      padding: 8px 12px; font-family: var(--ff-body); font-size: .76rem; font-weight: 700;
+      color: #fff; background: var(--blue-deep); border: none;
+      border-radius: var(--r-sm); cursor: pointer; transition: all var(--ease); white-space: nowrap;
+    }
+    .btn-details:hover { background: var(--blue); }
+
+    /* EMPTY STATE */
+    .empty-state {
+      grid-column: 1/-1; text-align: center; padding: 80px 24px;
+      background: var(--card); border: 2px dashed var(--bd); border-radius: var(--r-xl);
+    }
+    .empty-icon { font-size: 3.5rem; margin-bottom: 16px; }
+    .empty-state h3 { font-family: var(--ff-head); font-size: 1.1rem; font-weight: 700; color: var(--tx); margin-bottom: 8px; }
+    .empty-state p  { font-size: .86rem; color: var(--tx-3); }
+
+    /* BOTTOM NAV */
+    .bottom-nav-bar {
+      margin-top: 40px; padding: 18px 24px;
+      background: var(--card); border: 1px solid var(--bd-2); border-radius: var(--r-xl); box-shadow: var(--sh-sm);
+      display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 14px;
+    }
+    .bottom-links { display: flex; gap: 8px; flex-wrap: wrap; }
+    .btn-nav {
+      display: flex; align-items: center; gap: 6px;
+      padding: 9px 16px; font-family: var(--ff-body); font-size: .84rem; font-weight: 600;
+      color: var(--tx-2); background: var(--card); border: 1px solid var(--bd);
+      border-radius: var(--r-sm); cursor: pointer; transition: all var(--ease);
+    }
+    .btn-nav:hover { background: var(--blue-soft); color: var(--blue-deep); border-color: #bfdbfe; }
+    .btn-nav.primary { background: var(--blue-deep); color: #fff; border-color: var(--blue-deep); }
+    .btn-nav.primary:hover { background: var(--blue); }
+
+    /* FOOTER */
+    footer { background: var(--navy); color: rgba(255,255,255,.4); padding: 28px 0; }
+    .footer-inner {
+      max-width: 1240px; margin: 0 auto; padding: 0 28px;
+      display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; font-size: .82rem;
+    }
+    footer a { color: var(--gold); }
+
+    /* ═══════════════════════════════════════════════════
+       RESPONSIVE
+    ═══════════════════════════════════════════════════ */
+    @media (max-width: 1100px) { .courses-grid { grid-template-columns: repeat(2, 1fr); } }
+    @media (max-width: 768px) {
+      .nav-links { display: none; }
+      .courses-grid { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+      .hero-title { font-size: 2rem; }
+    }
+    @media (max-width: 560px) {
+      .courses-grid { grid-template-columns: 1fr; }
+      .nav-inner, .container { padding: 0 18px; }
+      .nav-name, .nav-badge { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════════
+     NAVBAR
+═══════════════════════════════════════════════════════════ -->
+
+
+<nav class="navbar">
+  <div class="nav-inner">
+    <a href="/student-home" class="nav-logo">
+      <div class="logo-mark">📚</div>
+      CourseHub
+    </a>
+    <ul class="nav-links">
+      <!--<li><a href="/student-home">Dashboard</a></li>-->
+      <li><a href="/all-courses" class="active">Browse Courses</a></li>
+      <!--<li><a href="/my-courses">My Courses</a></li>-->
+    </ul>
+
+    <div class="nav-right">
+      <span class="nav-badge">🎓 Student</span>
+      <!-- THYMELEAF: th:text="${session.user.firstname}" -->
+      <span class="nav-name" th:text="${session.user.firstname}">Rahul</span>
+      <a href="/student-home"><button class="btn-nav-ghost">← Dashboard</button></a>
+      <div class="cart-wrap">
+        <a href="/cart"><button class="btn-cart">🛒 Cart</button></a>
+        <span class="cart-badge"
+              th:if="${cartCount != null and cartCount > 0}"
+              th:text="${cartCount}">0</span>
+      </div>
+
+
+
+      <button class="btn-menu" id="menuToggle">☰ Menu</button>
+      <div class="menu-dd" id="menuDd">
+        <div class="menu-ui">
+          <!-- th:text="${session.user.firstname} + ' ' + ${session.user.lastname}" -->
+          <div class="menu-uname" th:text="${session.user.firstname} + ' ' + ${session.user.lastname}">Rahul Kumar</div>
+          <!-- th:text="${session.user.email}" -->
+          <div class="menu-uemail" th:text="${session.user.email}">rahul@example.com</div>
+          <div class="menu-urole">🎓 Student</div>
+        </div>
+        <a href="/student-profile"><div class="mi"><span class="mi-icon">👤</span>Profile</div></a>
+        <a href="/my-courses"><div class="mi"><span class="mi-icon">📚</span>My Enrolled Courses</div></a>
+        <a href="/cart"><div class="mi"><span class="mi-icon">🛒</span>My Cart<span style="margin-left:auto;font-size:.73rem;color:var(--blue);font-weight:700" th:if="${cartCount != null and cartCount > 0}" th:text="'(' + ${cartCount} + ')'"></span></div></a>
+        <a href="/all-courses"><div class="mi current"><span class="mi-icon">🔍</span>Explore Courses</div></a>
+        <a href="#"><div class="mi"><span class="mi-icon">🏆</span>My Certificates</div></a>
+        <a href="/student-profile"><div class="mi"><span class="mi-icon">⚙️</span>Account Settings</div></a>
+        <hr class="menu-div">
+        <a href="/logout"><div class="mi danger"><span class="mi-icon">🚪</span>Logout</div></a>
+      </div>
+
+
+
+
+    </div>
+  </div>
+</nav>
+
+
+
+
+
+
+
+
+
+
+
+<!-- ═══════════════════════════════════════════════════════════
+     HERO BANNER
+═══════════════════════════════════════════════════════════ -->
+<div class="hero">
+  <div class="container">
+    <nav class="breadcrumb">
+      <a href="/student-home">Dashboard</a>
+      <span>›</span>
+      <span>All Courses</span>
+    </nav>
+    <div class="hero-layout">
+      <div>
+        <div class="hero-label">📚 Full Course Catalogue</div>
+        <h1 class="hero-title">Find Your Next<br><span class="acc">Favourite Course</span></h1>
+        <p class="hero-sub">Browse all available courses. Add to cart and start learning today — from beginner to advanced tracks.</p>
+      </div>
+      <div class="hero-stats">
+        <!--
+          THYMELEAF: th:text="${#lists.size(courses)}"
+        -->
+        <div class="hstat">
+          <span class="hstat-num" th:text="${#lists.size(courses)}">0</span>
+          <div class="hstat-label">Total Courses</div>
+        </div>
+        <div class="hstat">
+          <span class="hstat-num">∞</span>
+          <div class="hstat-label">Lifetime Access</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════
+     MAIN
+═══════════════════════════════════════════════════════════ -->
+<main class="main">
+  <div class="container">
+
+    <!-- TOOLBAR -->
+    <div class="toolbar">
+      <div>
+        <div class="toolbar-tag">📚 Catalogue</div>
+        <h2 class="toolbar-title">All Available Courses</h2>
+      </div>
+      <div class="toolbar-right">
+        <div class="count-chip">
+          <!-- THYMELEAF: th:text="${#lists.size(courses)}" -->
+          <span th:text="${#lists.size(courses)}">0</span>
+          <span>courses</span>
+        </div>
+        <a href="/student-home" class="back-link">← Back to Dashboard</a>
+      </div>
+    </div>
+
+    <!-- FILTER TABS — client-side JS filter -->
+    <div class="filter-bar">
+      <button class="filter-tab active" onclick="filterCourses('all', this)">All Courses</button>
+      <button class="filter-tab" onclick="filterCourses('paid', this)">💰 Paid</button>
+      <button class="filter-tab" onclick="filterCourses('free', this)">🆓 Free</button>
+    </div>
+
+    <!--
+    ════════════════════════════════════════════════════════════════
+    COURSE GRID
+    ════════════════════════════════════════════════════════════════
+
+    EMPTY STATE:
+      th:if="${#lists.isEmpty(courses)}"
+
+    DYNAMIC CARDS:
+      th:each="course, iter : ${courses}"
+      th:data-type="${course.courseType}"  ← used by JS filter
+
+    BUTTON LOGIC (3 states):
+      th:if="${enrolledIds.contains(course.courseId)}"
+        → Show "Go to Course" (green) — already purchased
+      th:if="${cartIds.contains(course.courseId) and !enrolledIds.contains(course.courseId)}"
+        → Show "In Cart" (amber) — in cart but not purchased
+      th:unless="${enrolledIds.contains(course.courseId) or cartIds.contains(course.courseId)}"
+        → Show "Add to Cart" (blue) — neither in cart nor purchased
+    ════════════════════════════════════════════════════════════════
+    -->
+
+    <!-- EMPTY STATE -->
+    <div class="courses-grid" th:if="${#lists.isEmpty(courses)}">
+      <div class="empty-state">
+        <div class="empty-icon">📭</div>
+        <h3>No Courses Available Yet</h3>
+        <p>Trainers are still adding content. Check back soon!</p>
+      </div>
+    </div>
+
+    <!-- DYNAMIC COURSE CARDS -->
+    <div class="courses-grid" th:unless="${#lists.isEmpty(courses)}" id="coursesGrid">
+
+      <div class="course-card"
+           th:each="course, iter : ${courses}"
+           th:data-type="${course.courseType}"
+           th:style="'animation-delay:' + ${iter.index * 50} + 'ms'">
+
+        <!-- Colour band with cycling colours -->
+        <div class="card-band"
+             th:classappend="${iter.index % 6 == 0} ? 'bc1' :
+                      (${iter.index % 6 == 1} ? 'bc2' :
+                      (${iter.index % 6 == 2} ? 'bc3' :
+                      (${iter.index % 6 == 3} ? 'bc4' :
+                      (${iter.index % 6 == 4} ? 'bc5' : 'bc6'))))">
+          <div class="card-emoji">📘</div>
+          <span class="type-pill pill-free" th:if="${course.courseType == 'free'}">Free</span>
+          <span class="type-pill pill-paid" th:unless="${course.courseType == 'free'}">Paid</span>
+        </div>
+
+        <div class="card-body">
+          <!-- Course name — ID never shown to students -->
+          <div class="card-name" th:text="${course.courseName}">Course Name</div>
+          <!-- Trainer name BOLD -->
+          <div class="card-trainer">👤 <span th:text="${course.trainerName}">Trainer</span></div>
+          <div class="card-desc" th:text="${course.courseShortDescription}">Description</div>
+          <div class="card-meta">📖 <span th:text="${#lists.size(course.lessons)} + ' lessons'">0 lessons</span></div>
+        </div>
+
+        <div class="card-footer">
+          <div class="price-row">
+            <div>
+              <div class="price-free" th:if="${course.courseType == 'free'}">Free</div>
+              <div class="price-paid" th:unless="${course.courseType == 'free'}"
+                   th:text="'₹' + ${course.coursePrice}">₹999</div>
+              <div class="price-sub" th:if="${course.courseType == 'free'}">No cost, ever</div>
+              <div class="price-sub" th:unless="${course.courseType == 'free'}">One-time payment</div>
+            </div>
+          </div>
+
+          <!-- ── BUTTON ROW: 3 states based on purchase/cart status ── -->
+          <div class="btn-row">
+
+            <!--
+              STATE 3: ALREADY ENROLLED — show "Go to Course" (green)
+              THYMELEAF: th:if="${enrolledIds.contains(course.courseId)}"
+              enrolledIds is a List<String> of courseIds from purchased courses
+            -->
+            <a href="/my-courses" th:if="${enrolledIds != null and enrolledIds.contains(course.courseId)}">
+              <button class="btn-enrolled">✓ Go to Course</button>
+            </a>
+
+            <!--
+              STATE 2: IN CART — show "In Cart" (amber, disabled feel)
+              THYMELEAF: th:if="${cartIds.contains(courseId) and NOT in enrolled}"
+              Links to /cart so student can go review and checkout
+            -->
+            <a href="/cart"
+               th:if="${cartIds != null and cartIds.contains(course.courseId) and (enrolledIds == null or !enrolledIds.contains(course.courseId))}">
+              <button class="btn-in-cart">🛒 In Cart</button>
+            </a>
+
+            <!--
+              STATE 1: DEFAULT — show "Add to Cart"
+              THYMELEAF: th:unless both of above conditions are true
+              th:unless="${(enrolledIds != null and enrolledIds.contains(course.courseId)) or
+                           (cartIds != null and cartIds.contains(course.courseId))}"
+            -->
+            <a th:href="@{/cart/add(courseId=${course.courseId})}"
+               th:unless="${(enrolledIds != null and enrolledIds.contains(course.courseId)) or
+                            (cartIds != null and cartIds.contains(course.courseId))}">
+              <button class="btn-add-cart">+ Cart</button>
+            </a>
+
+            <!--
+              DETAILS BUTTON — always visible
+              th:href="@{/course-details/{id}(id=${course.courseId})}"
+              Opens full course page with lesson preview
+            -->
+            <a th:href="@{/course-details/{id}(id=${course.courseId})}">
+              <button class="btn-details">Details →</button>
+            </a>
+
+          </div><!-- /btn-row -->
+
+        </div><!-- /card-footer -->
+
+      </div><!-- /course-card loop end -->
+
+    </div><!-- /courses-grid -->
+
+    <!-- BOTTOM NAV -->
+    <div class="bottom-nav-bar">
+      <div class="bottom-links">
+        <a href="/student-home"><button class="btn-nav">🏠 Dashboard</button></a>
+        <a href="/my-courses"><button class="btn-nav">🎓 My Courses</button></a>
+        <a href="/cart"><button class="btn-nav primary">🛒 View Cart</button></a>
+      </div>
+      <span style="font-size:.82rem;color:var(--tx-4);">© 2026 CourseHub</span>
+    </div>
+
+  </div>
+</main>
+
+<footer>
+  <div class="footer-inner">
+    <span>© 2026 <a href="/">CourseHub</a> — Built with Spring Boot &amp; Thymeleaf</span>
+    <span><a href="/student-home">Dashboard</a> &nbsp;·&nbsp; <a href="/cart">Cart</a></span>
+  </div>
+</footer>
+
+<script>
+  /* ═══════════════════════════════════════════════════════════
+     CLIENT-SIDE FILTER TABS
+     Filters cards by data-type="free" or data-type="paid"
+
+     WHY THIS APPROACH:
+     All cards are already rendered by Thymeleaf server-side.
+     JS just toggles CSS display — no extra server round-trips.
+     Fast, simple, works without changing backend.
+  ═══════════════════════════════════════════════════════════ */
+
+   const mt=document.getElementById('menuToggle'),md=document.getElementById('menuDd');
+mt.addEventListener('click',e=>{e.stopPropagation();md.classList.toggle('open')});
+document.addEventListener('click',()=>md.classList.remove('open'));
+md.addEventListener('click',e=>e.stopPropagation());
+
+
+  function filterCourses(type, btn) {
+    document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
+    btn.classList.add('active');
+    document.querySelectorAll('.course-card').forEach(card => {
+      const show = type === 'all' || card.dataset.type === type;
+      card.style.display = show ? '' : 'none';
+    });
+  }
+</script>
+
+</body>
+</html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
