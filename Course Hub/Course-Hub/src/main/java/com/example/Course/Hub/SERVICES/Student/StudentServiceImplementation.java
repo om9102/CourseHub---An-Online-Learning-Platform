@@ -81,6 +81,14 @@ public class StudentServiceImplementation implements StudentServices {
     }
 
 
+    /**
+     * Fetch all lessons for a course — sorted by lessonId.
+     * Used to populate the sidebar lesson list on the watch page.
+     *
+     * @param courseId  "JAVA101", "PY201", etc.
+     */
+
+
 
 
 
