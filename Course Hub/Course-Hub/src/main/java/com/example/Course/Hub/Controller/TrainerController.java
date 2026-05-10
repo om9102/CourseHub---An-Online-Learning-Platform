@@ -57,6 +57,11 @@ public class TrainerController {
 
 
 
+// FOR ADDING LESSON
+// In Trainer Page every trainer 
+// POST API
+// HTML PAGE - TrainerHome.html
+
 
     @PostMapping("/addLesson")
     public String addLesson(@RequestParam("lessonId") int lessonId,
