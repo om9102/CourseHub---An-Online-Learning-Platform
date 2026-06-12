@@ -607,7 +607,10 @@ public class StudentController {
 
 
 
+ // ════════════════════════════════════════════════════════════
+    //  GET /student-home   →   Student Dashboard
 
+    
 
 
 
